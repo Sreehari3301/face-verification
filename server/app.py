@@ -16,6 +16,7 @@ import base64
 from typing import Dict
 
 from fastapi import FastAPI, HTTPException
+from fastapi.responses import HTMLResponse
 from pydantic import BaseModel
 from phe import paillier
 
@@ -64,18 +65,99 @@ class VerifyRequest(BaseModel):
     query_plain: list[float]
 
 
-@app.get("/")
+EMBEDDER = None
+
+def get_embedder():
+    global EMBEDDER
+    if EMBEDDER is None:
+        from edge.embedding import FaceEmbedder
+        EMBEDDER = FaceEmbedder()
+    return EMBEDDER
+
+
+class EmbedBase64Request(BaseModel):
+    image_base64: str
+
+
+class ClientEnrollRequest(BaseModel):
+    user_id: str
+    public_key_n: str
+    enc_vector: list[str]
+    enc_norm_sq: str
+
+
+class UnpackRequest(BaseModel):
+    enc_distance_sq: str
+
+
+@app.get("/", response_class=HTMLResponse)
 def read_root():
+    dir_path = os.path.dirname(os.path.realpath(__file__))
+    file_path = os.path.join(dir_path, "index.html")
+    with open(file_path, "r", encoding="utf-8") as f:
+        html_content = f.read()
+    return HTMLResponse(content=html_content)
+
+
+@app.post("/api/embed")
+def extract_embedding_base64(req: EmbedBase64Request):
+    try:
+        import base64
+        from PIL import Image
+        import io
+        
+        data = req.image_base64
+        if "," in data:
+            data = data.split(",")[1]
+        img_bytes = base64.b64decode(data)
+        image = Image.open(io.BytesIO(img_bytes)).convert("RGB")
+        
+        embedder = get_embedder()
+        emb = embedder.embed(image)
+        return {"embedding": emb.tolist()}
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Embedding extraction failed: {str(e)}")
+
+
+@app.get("/api/crypto/keygen")
+def generate_keys(key_length: int = 1024):
+    if key_length not in [1024, 2048]:
+        raise HTTPException(status_code=400, detail="Invalid key length. Use 1024 or 2048.")
+    public_key, private_key = paillier.generate_paillier_keypair(n_length=key_length)
     return {
-        "name": "Zero-Trust Privacy-Preserving Facial Verification API",
-        "status": "active",
-        "documentation": "See README.md for architecture and protocol specs.",
-        "endpoints": {
-            "/enroll": "POST - Enroll encrypted user biometric template",
-            "/verify": "POST - Compute homomorphic squared distance against query embedding",
-            "/health": "GET - Check server health and template store type"
-        }
+        "public_key_n": str(public_key.n),
+        "private_key_p": str(private_key.p),
+        "private_key_q": str(private_key.q)
     }
+
+
+@app.post("/api/client/enroll")
+def client_enroll(req: ClientEnrollRequest):
+    pub_n = int(req.public_key_n)
+    public_key = paillier.PaillierPublicKey(n=pub_n)
+    
+    enc_vector_b64 = []
+    for c_str in req.enc_vector:
+        enc_num = paillier.EncryptedNumber(public_key, int(c_str), -6)
+        enc_vector_b64.append(_serialize_encrypted_number(enc_num, public_key))
+        
+    enc_norm_sq_num = paillier.EncryptedNumber(public_key, int(req.enc_norm_sq), -12)
+    enc_norm_sq_b64 = _serialize_encrypted_number(enc_norm_sq_num, public_key)
+    
+    template_json = serialize_template(enc_vector_b64, enc_norm_sq_b64, pub_n)
+    STORE.set(f"template:{req.user_id}", template_json)
+    if hasattr(STORE, "increment_count"):
+        STORE.increment_count()
+        
+    return {"status": "enrolled", "user_id": req.user_id, "dims": len(req.enc_vector)}
+
+
+@app.post("/api/client/unpack_distance")
+def unpack_distance(req: UnpackRequest):
+    enc_num = _deserialize_encrypted_number(req.enc_distance_sq)
+    return {"ciphertext": str(enc_num.ciphertext())}
 
 
 @app.post("/enroll")

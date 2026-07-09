@@ -6,6 +6,7 @@ fastapi
 uvicorn
 pydantic
 requests
+python-multipart
 
 # ML / embeddings
 numpy
