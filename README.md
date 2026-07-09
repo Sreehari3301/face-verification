@@ -7,7 +7,7 @@ sequenceDiagram
     autonumber
     actor Client as Edge Device (Browser/Client)
     participant Server as Cloud Server (Vercel)
-    database DB as Persistent DB (Vercel KV)
+    participant DB as Persistent DB (Vercel KV)
 
     Note over Client: Step 1: Biometric Enrollment
     Client->>Client: Capture Face Image
