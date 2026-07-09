@@ -8,12 +8,5 @@ pydantic
 requests
 python-multipart
 
-# ML / embeddings
-numpy
-scikit-learn
-torch
-torchvision
+# Image processing (lightweight, fits in serverless)
 Pillow
-
-# Evaluation / attack metrics
-scikit-image
