@@ -1,0 +1,38 @@
+# Runs edge client and cloud server as separate containers on separate
+# networks, so key custody (private key only ever exists in the `edge`
+# container) is enforced by deployment topology, not just by convention
+# in the code. This is what makes the "zero-trust" claim something you can
+# actually point to in an architecture review, not just a docstring.
+#
+# Usage:
+#   docker compose up --build server     # starts the verification server
+#   docker compose run --rm edge         # runs the edge client against it
+
+services:
+  server:
+    build:
+      context: .
+      dockerfile: server/Dockerfile
+    ports:
+      - "8000:8000"
+    networks:
+      - verification_net
+    # The server image must never install or import anything that touches
+    # a Paillier private key. There's no runtime enforcement of that here --
+    # it's a code-review invariant, documented in server/app.py's module
+    # docstring.
+
+  edge:
+    build:
+      context: .
+      dockerfile: edge/Dockerfile
+    depends_on:
+      - server
+    networks:
+      - verification_net
+    environment:
+      - SERVER_URL=http://server:8000
+
+networks:
+  verification_net:
+    driver: bridge

@@ -1,0 +1,18 @@
+# Cryptography
+phe
+
+# Server
+fastapi
+uvicorn
+pydantic
+requests
+
+# ML / embeddings
+numpy
+scikit-learn
+torch
+torchvision
+Pillow
+
+# Evaluation / attack metrics
+scikit-image

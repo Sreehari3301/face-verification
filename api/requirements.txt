@@ -1,0 +1,10 @@
+# Vercel picks up THIS requirements.txt (co-located with api/index.py)
+# instead of the root one, which includes torch/facenet-pytorch for the
+# edge client. The server never imports those -- keeping them out of this
+# function keeps the deployment well under Vercel's 250MB unzipped limit
+# and avoids a multi-minute cold build.
+phe==1.5.0
+fastapi==0.115.0
+pydantic==2.9.2
+requests==2.32.3
+numpy==1.26.4
