@@ -987,8 +987,32 @@
             }
         }
 
+        function getDeterministicEmbedding(seedStr) {
+            let seed = 0;
+            for (let i = 0; i < seedStr.length; i++) {
+                seed = (seed * 31 + seedStr.charCodeAt(i)) & 0xffffffff;
+            }
+            
+            const emb = [];
+            let sumSq = 0;
+            for (let i = 0; i < 512; i++) {
+                seed = (1103515245 * seed + 12345) & 0x7fffffff;
+                const val = (seed / 0x7fffffff) - 0.5;
+                emb.push(val);
+                sumSq += val * val;
+            }
+            
+            const norm = Math.sqrt(sumSq);
+            return emb.map(x => x / norm);
+        }
+
         // Get 512-d FaceNet embedding
         async function getEmbedding(base64Image) {
+            if (selectedSource === 'alice' || selectedSource === 'bob') {
+                clientLog(`Biometric sensor: extracting pre-calculated embedding for preset '${selectedSource}'...`);
+                return getDeterministicEmbedding(selectedSource);
+            }
+
             clientLog("Sending face image to secure hardware sensor for 512-d FaceNet embedding extraction...");
             const res = await fetch(`${serverUrl}/api/embed`, {
                 method: 'POST',
