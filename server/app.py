@@ -64,6 +64,20 @@ class VerifyRequest(BaseModel):
     query_plain: list[float]
 
 
+@app.get("/")
+def read_root():
+    return {
+        "name": "Zero-Trust Privacy-Preserving Facial Verification API",
+        "status": "active",
+        "documentation": "See README.md for architecture and protocol specs.",
+        "endpoints": {
+            "/enroll": "POST - Enroll encrypted user biometric template",
+            "/verify": "POST - Compute homomorphic squared distance against query embedding",
+            "/health": "GET - Check server health and template store type"
+        }
+    }
+
+
 @app.post("/enroll")
 def enroll(req: EnrollRequest):
     """Stores a ciphertext template. Server never sees a raw embedding here."""
