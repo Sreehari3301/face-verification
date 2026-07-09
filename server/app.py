@@ -140,10 +140,10 @@ def client_enroll(req: ClientEnrollRequest):
     
     enc_vector_b64 = []
     for c_str in req.enc_vector:
-        enc_num = paillier.EncryptedNumber(public_key, int(c_str), -6)
+        enc_num = paillier.EncryptedNumber(public_key, int(c_str), 0)
         enc_vector_b64.append(_serialize_encrypted_number(enc_num, public_key))
         
-    enc_norm_sq_num = paillier.EncryptedNumber(public_key, int(req.enc_norm_sq), -12)
+    enc_norm_sq_num = paillier.EncryptedNumber(public_key, int(req.enc_norm_sq), 0)
     enc_norm_sq_b64 = _serialize_encrypted_number(enc_norm_sq_num, public_key)
     
     template_json = serialize_template(enc_vector_b64, enc_norm_sq_b64, pub_n)
