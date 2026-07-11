@@ -315,6 +315,7 @@ tr:last-child td{border-bottom:none}
                 <div>Accuracy: <span id="metric-accuracy" style="font-weight:600;color:var(--text-primary);">-</span></div>
                 <div>FAR: <span id="metric-far" style="font-weight:600;color:var(--danger);">-</span></div>
                 <div>FRR: <span id="metric-frr" style="font-weight:600;color:var(--danger);">-</span></div>
+                <div>F1 Score: <span id="metric-f1" style="font-weight:600;color:var(--accent-primary);">-</span></div>
             </div>
         </div>
 
@@ -436,12 +437,14 @@ tr:last-child td{border-bottom:none}
     function updateConfusionMatrixUI() {
         ['tp','tn','fp','fn'].forEach(k => gid(`matrix-${k}`).querySelector('.count').textContent = matrixStats[k]);
         const total = matrixStats.tp + matrixStats.tn + matrixStats.fp + matrixStats.fn;
-        if (total === 0) { ['metric-accuracy','metric-far','metric-frr'].forEach(id => gid(id).textContent = '-'); return; }
+        if (total === 0) { ['metric-accuracy','metric-far','metric-frr','metric-f1'].forEach(id => gid(id).textContent = '-'); return; }
         gid('metric-accuracy').textContent = (((matrixStats.tp + matrixStats.tn) / total) * 100).toFixed(1) + '%';
         const mismatch = matrixStats.fp + matrixStats.tn;
         gid('metric-far').textContent = mismatch > 0 ? ((matrixStats.fp / mismatch) * 100).toFixed(1) + '%' : '0.0%';
         const match = matrixStats.tp + matrixStats.fn;
         gid('metric-frr').textContent = match > 0 ? ((matrixStats.fn / match) * 100).toFixed(1) + '%' : '0.0%';
+        const f1Denom = 2 * matrixStats.tp + matrixStats.fp + matrixStats.fn;
+        gid('metric-f1').textContent = f1Denom > 0 ? ((2 * matrixStats.tp / f1Denom)).toFixed(3) : '0.000';
     }
 
     function resetConfusionMatrix() {
