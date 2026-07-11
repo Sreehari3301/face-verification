@@ -469,15 +469,19 @@ tr:last-child td{border-bottom:none}
 
     let faceScanInterval = null;
     let faceScanPulse = 0;
+    let faceDetectedFrames = 0;  // consecutive frames with face detected
+    const FACE_CONFIRM_FRAMES = 2; // capture after this many consecutive detections
 
     async function startFaceScan() {
         const canvas = gid('face-scan-canvas');
         const badge  = gid('face-badge');
+        const textSpan = gid('countdown-text');
         if (!canvas || !webcam) return;
         canvas.width  = webcam.videoWidth  || 400;
         canvas.height = webcam.videoHeight || 300;
         canvas.style.display = 'block';
         badge.style.display  = 'block';
+        faceDetectedFrames = 0;
 
         faceScanInterval = setInterval(async () => {
             if (!stream) { stopFaceScan(); return; }
@@ -488,7 +492,6 @@ tr:last-child td{border-bottom:none}
 
             if ('FaceDetector' in window) {
                 try {
-                    // Grab current frame into temp canvas for detection
                     const tmp = document.createElement('canvas');
                     tmp.width = webcam.videoWidth || 400; tmp.height = webcam.videoHeight || 300;
                     const tctx = tmp.getContext('2d');
@@ -497,49 +500,70 @@ tr:last-child td{border-bottom:none}
 
                     const faces = await new FaceDetector({ fastMode:true, maxDetectedFaces:1 }).detect(tmp);
                     if (faces.length > 0) {
+                        faceDetectedFrames++;
                         const b = faces[0].boundingBox;
                         const pad = Math.max(b.width, b.height) * 0.35;
                         const cx = Math.max(0, b.x - pad), cy = Math.max(0, b.y - pad * 1.2);
-                        const cw = Math.min(tmp.width,  b.x + b.width  + pad)   - cx;
-                        const ch = Math.min(tmp.height, b.y + b.height + pad)   - cy;
+                        const cw = Math.min(tmp.width,  b.x + b.width  + pad) - cx;
+                        const ch = Math.min(tmp.height, b.y + b.height + pad) - cy;
 
-                        // Draw crop-preview box
+                        // Draw pulsing crop box
                         ctx.save();
                         ctx.strokeStyle = `rgba(16,185,129,${pulse})`;
                         ctx.lineWidth = 2.5;
                         ctx.shadowColor = 'rgba(16,185,129,.7)';
                         ctx.shadowBlur = 8;
                         ctx.strokeRect(cx, cy, cw, ch);
-
                         // Corner accents
                         const cs = 14;
                         ctx.lineWidth = 3.5;
                         [[cx,cy],[cx+cw,cy],[cx,cy+ch],[cx+cw,cy+ch]].forEach(([x,y],i) => {
                             ctx.beginPath();
-                            ctx.moveTo(x + (i%2===0?0:cs*-1), y); ctx.lineTo(x + (i%2===0?cs:-cs), y);
-                            ctx.moveTo(x, y + (i<2?0:cs*-1)); ctx.lineTo(x, y + (i<2?cs:-cs));
+                            ctx.moveTo(x + (i%2===0?0:-cs), y); ctx.lineTo(x + (i%2===0?cs:-cs), y);
+                            ctx.moveTo(x, y + (i<2?0:-cs)); ctx.lineTo(x, y + (i<2?cs:-cs));
                             ctx.stroke();
                         });
                         ctx.restore();
 
-                        badge.textContent = '✓ FACE DETECTED';
-                        badge.style.background = 'rgba(16,185,129,.15)';
-                        badge.style.border = '1px solid rgba(16,185,129,.4)';
-                        badge.style.color = '#10b981';
+                        if (faceDetectedFrames >= FACE_CONFIRM_FRAMES) {
+                            // Face stably detected — capture immediately
+                            badge.textContent = '✓ Face detected! Capturing...';
+                            badge.style.background = 'rgba(16,185,129,.25)';
+                            badge.style.border = '1px solid rgba(16,185,129,.6)';
+                            badge.style.color = '#10b981';
+                            if (textSpan) textSpan.textContent = 'Face detected! Capturing...';
+                            stopFaceScan();
+                            await captureSnapshot();
+                        } else {
+                            badge.textContent = '✓ FACE DETECTED — Hold still...';
+                            badge.style.background = 'rgba(16,185,129,.15)';
+                            badge.style.border = '1px solid rgba(16,185,129,.4)';
+                            badge.style.color = '#10b981';
+                            if (textSpan) textSpan.textContent = 'Face detected — Hold still...';
+                        }
                     } else {
+                        faceDetectedFrames = 0; // reset streak
                         drawNoFaceBox(ctx, canvas, pulse);
-                        badge.textContent = '⚠ NO FACE — CENTRE CROP ACTIVE';
+                        badge.textContent = '⚠ No face — align your face to the camera';
                         badge.style.background = 'rgba(245,158,11,.12)';
                         badge.style.border = '1px solid rgba(245,158,11,.35)';
                         badge.style.color = '#f59e0b';
+                        if (textSpan) textSpan.textContent = 'Align your face...';
                     }
                 } catch(e) { drawNoFaceBox(ctx, canvas, pulse); }
             } else {
+                // No FaceDetector API — draw centre-crop box and auto-capture after 1 s
                 drawNoFaceBox(ctx, canvas, pulse);
-                badge.textContent = 'ℹ CENTRE CROP ACTIVE (no FaceDetector API)';
+                badge.textContent = 'ℹ CENTRE CROP ACTIVE — capturing shortly...';
                 badge.style.background = 'rgba(99,102,241,.12)';
                 badge.style.border = '1px solid rgba(99,102,241,.3)';
                 badge.style.color = 'var(--accent-primary)';
+                if (textSpan) textSpan.textContent = 'Align your face...';
+                faceDetectedFrames++;
+                if (faceDetectedFrames >= 4) { // ~1.2 s settle time
+                    stopFaceScan();
+                    await captureSnapshot();
+                }
             }
         }, 300);
     }
@@ -558,26 +582,18 @@ tr:last-child td{border-bottom:none}
 
     function stopFaceScan() {
         clearInterval(faceScanInterval); faceScanInterval = null;
+        faceDetectedFrames = 0;
         const canvas = gid('face-scan-canvas'), badge = gid('face-badge');
         if (canvas) { canvas.getContext('2d').clearRect(0,0,canvas.width,canvas.height); canvas.style.display='none'; }
-        if (badge)  badge.style.display = 'none';
+        if (badge) badge.style.display = 'none';
     }
 
-    function startCountdown() {
-        if (countdownTimerActive) return;
+    function startFaceWatch() {
+        if (faceScanInterval) return; // already watching
         const overlay = gid('countdown-overlay'), textSpan = gid('countdown-text');
         overlay.style.display = 'flex';
-        textSpan.textContent = 'Aligning Face...';
-        countdownTimerActive = true;
+        if (textSpan) textSpan.textContent = 'Align your face...';
         startFaceScan();
-        let seconds = 2;
-        countdownTimer = setInterval(() => {
-            if (selectedSource !== 'webcam' || !stream) {
-                clearInterval(countdownTimer); overlay.style.display = 'none'; countdownTimerActive = false; stopFaceScan(); return;
-            }
-            if (seconds > 0) { textSpan.textContent = `Capturing in ${seconds--}...`; }
-            else { clearInterval(countdownTimer); overlay.style.display = 'none'; countdownTimerActive = false; stopFaceScan(); captureSnapshot(); }
-        }, 1000);
     }
 
     function updateCaptureUI() {
@@ -614,7 +630,7 @@ tr:last-child td{border-bottom:none}
         resetFormState();
         if (source === 'webcam') {
             currentImageBase64 = null;
-            if (!stream) { toggleCamera(); } else { startCountdown(); updateCaptureUI(); }
+            if (!stream) { toggleCamera(); } else { startFaceWatch(); updateCaptureUI(); }
             btnCamera.style.display = 'inline-flex'; btnSnap.style.display = 'inline-flex';
             validateActionButtons();
         } else {
@@ -686,7 +702,8 @@ tr:last-child td{border-bottom:none}
             stream = await navigator.mediaDevices.getUserMedia({ video: { width:400, height:300 } });
             webcam.srcObject = stream; btnCamera.textContent = 'Stop Camera'; btnSnap.disabled = false;
             clientLog("Webcam stream started.");
-            startCountdown(); updateCaptureUI();
+            startFaceWatch();
+            updateCaptureUI();
         } catch (err) {
             clientLog(`Webcam access denied: ${err.name} - ${err.message}`, "danger");
             alert(`Unable to access webcam (${err.name}). Allow camera access or select a preset face avatar.`);
@@ -695,8 +712,6 @@ tr:last-child td{border-bottom:none}
 
     function stopCamera() {
         if (!stream) return;
-        if (countdownTimer) clearInterval(countdownTimer);
-        countdownTimerActive = false;
         stopFaceScan();
         const overlay = gid('countdown-overlay');
         if (overlay) overlay.style.display = 'none';
