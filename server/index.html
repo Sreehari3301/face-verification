@@ -352,9 +352,26 @@
             font-weight: 600;
         }
 
-        .avatar-role {
-            font-size: 0.7rem;
-            color: var(--text-secondary);
+        .action-form-container {
+            border: 1px solid var(--border-color);
+            padding: 1.25rem;
+            border-radius: 16px;
+            background-color: rgba(10, 11, 16, 0.4);
+            display: none;
+            flex-direction: column;
+            gap: 1rem;
+            animation: slideIn 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+
+        @keyframes slideIn {
+            from {
+                opacity: 0;
+                transform: translateY(8px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
         }
 
         .terminal-container {
@@ -583,14 +600,8 @@
                         <option value="2048">2048-bit (Production Security)</option>
                     </select>
                 </div>
-                <div class="input-group">
-                    <label for="user-id">User Identity</label>
-                    <input type="text" id="user-id" value="alice" placeholder="Enter username">
-                </div>
-                <div class="input-group">
-                    <label for="user-pw">Update Password</label>
-                    <input type="password" id="user-pw" placeholder="Password (required)">
-                </div>
+                <input type="hidden" id="user-id" value="alice">
+                <input type="hidden" id="user-pw" value="">
             </div>
 
             <div class="input-group">
@@ -634,18 +645,37 @@
                     </svg>
                     <p>Webcam Access Ready</p>
                 </div>
+                <div id="countdown-overlay" style="display: none; position: absolute; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0, 0, 0, 0.45); color: white; flex-direction: column; align-items: center; justify-content: center; font-size: 1.5rem; font-weight: 700; z-index: 10;">
+                    <div style="background: rgba(10, 11, 16, 0.9); border: 1px solid var(--border-color); padding: 1rem 2rem; border-radius: 50px; display: flex; align-items: center; gap: 0.75rem; box-shadow: 0 4px 20px rgba(0,0,0,0.5);">
+                        <span id="countdown-text">Aligning Face...</span>
+                    </div>
+                </div>
             </div>
 
             <div class="capture-controls" style="display: none !important;">
                 <button class="btn btn-secondary" id="btn-camera" onclick="toggleCamera()">Start Camera</button>
                 <button class="btn btn-secondary" id="btn-snap" onclick="captureSnapshot()" disabled>Snap Photo</button>
+                <button class="btn btn-primary" id="btn-enroll" onclick="runEnroll()" disabled>Enroll</button>
+                <button class="btn btn-primary" id="btn-verify" onclick="runVerify()" disabled>Verify</button>
             </div>
 
-            <div class="capture-controls">
-                <button class="btn btn-primary" id="btn-enroll" style="flex: 1;" onclick="runEnroll()" disabled>Encrypt
-                    & Enroll Template</button>
-                <button class="btn btn-primary" id="btn-verify" style="flex: 1; display: none !important;" onclick="runVerify()" disabled>Verify
-                    Identity</button>
+            <div class="action-form-container" id="action-form-container" style="display: none;">
+                <div style="font-size: 0.95rem; font-weight: 600; color: var(--text-primary);">Biometric Capture Actions</div>
+                <div class="config-grid">
+                    <div class="input-group">
+                        <label for="action-username">User Identity</label>
+                        <input type="text" id="action-username" placeholder="Username (e.g. alice)">
+                    </div>
+                    <div class="input-group">
+                        <label for="action-password">Update Password</label>
+                        <input type="password" id="action-password" placeholder="Password (only to enroll/update)">
+                    </div>
+                </div>
+                <div class="capture-controls" style="margin-top: 0.5rem;">
+                    <button class="btn btn-primary" style="flex: 1;" onclick="runVerifyFromForm()">Verify Identity</button>
+                    <button class="btn btn-primary" style="flex: 1; background: linear-gradient(135deg, #10b981, #059669); box-shadow: 0 4px 15px rgba(16, 185, 129, 0.2);" onclick="runEnrollFromForm()">Save & Enroll</button>
+                    <button class="btn btn-secondary" onclick="retakePhoto()">Retake Capture</button>
+                </div>
             </div>
 
             <div class="progress-bar-container" id="crypto-progress-container">
@@ -777,141 +807,61 @@
             epsilonVal.textContent = e.target.value;
         });
 
-        let autoScanInterval = null;
-        let isScanInProgress = false;
+        let countdownTimer = null;
+        let countdownTimerActive = false;
 
-        function startAutoScan() {
-            if (autoScanInterval) return;
-            clientLog("Auto-verification scanner active. Present your face to the camera...", "info");
-            autoScanInterval = setInterval(async () => {
+        function startCountdown() {
+            if (countdownTimerActive) return;
+            const overlay = document.getElementById('countdown-overlay');
+            const textSpan = document.getElementById('countdown-text');
+            overlay.style.display = 'flex';
+            textSpan.textContent = 'Aligning Face...';
+            countdownTimerActive = true;
+            
+            let seconds = 2;
+            countdownTimer = setInterval(() => {
                 if (selectedSource !== 'webcam' || !stream) {
-                    stopAutoScan();
+                    clearInterval(countdownTimer);
+                    overlay.style.display = 'none';
+                    countdownTimerActive = false;
                     return;
                 }
-                if (isScanInProgress) return;
-                
-                isScanInProgress = true;
-                
-                // Draw current frame in memory
-                const canvas = document.createElement('canvas');
-                canvas.width = webcam.videoWidth || 400;
-                canvas.height = webcam.videoHeight || 300;
-                const ctx = canvas.getContext('2d');
-                ctx.translate(canvas.width, 0);
-                ctx.scale(-1, 1);
-                ctx.drawImage(webcam, 0, 0, canvas.width, canvas.height);
-                const frameBase64 = canvas.toDataURL('image/jpeg');
-
-                try {
-                    const userId = document.getElementById('user-id').value.trim();
-                    if (!userId) {
-                        isScanInProgress = false;
-                        return;
-                    }
-
-                    // Pulse capture container to indicate scan
-                    const capContainer = document.querySelector('.capture-container');
-                    if (capContainer) {
-                        capContainer.style.borderColor = 'var(--accent-primary)';
-                        setTimeout(() => {
-                            capContainer.style.borderColor = 'var(--border-color)';
-                        }, 500);
-                    }
-
-                    const rawEmb = await getEmbedding(frameBase64);
-                    const perturbedEmb = applyPerturbation(rawEmb, parseFloat(epsilonInput.value));
-
-                    clientLog("Auto-scan: checking face match against server...");
-                    serverLog(`[Request] Auto-verify for user ID: '${userId}'`);
-
-                    const res = await fetch(`${serverUrl}/verify`, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({
-                            user_id: userId,
-                            query_plain: perturbedEmb
-                        })
-                    });
-
-                    if (!res.ok) {
-                        const err = await res.json();
-                        throw new Error(err.detail || "Verification failed on server.");
-                    }
-
-                    const data = await res.json();
-                    serverLog(`[Compute] Loaded ciphertexts for '${userId}'. Computed homomorphic distance successfully.`, "info");
-
-                    const unpackRes = await fetch(`${serverUrl}/api/client/unpack_distance`, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ enc_distance_sq: data.enc_distance_sq })
-                    });
-
-                    const unpackData = await unpackRes.json();
-                    const distanceSq = decryptDistance(unpackData.ciphertext);
-
-                    const threshold = 0.6;
-                    const isMatch = distanceSq <= threshold;
-
-                    clientLog(`Auto-scan match verification: ${distanceSq.toFixed(4)} <= ${threshold} -> ${isMatch ? 'GRANTED' : 'DENIED'}`, isMatch ? "success" : "danger");
-
-                    const resultBox = document.getElementById('result-box');
-                    if (isMatch) {
-                        resultBox.className = 'result-container granted';
-                        document.getElementById('result-title').textContent = "Access Granted";
-                        document.getElementById('result-desc').textContent = `Identity verified for user '${userId}' (d² = ${distanceSq.toFixed(4)}).`;
-                        document.getElementById('result-status').textContent = "PASS";
-                        
-                        // Freeze camera frame
-                        currentImageBase64 = frameBase64;
-                        photoPreview.src = frameBase64;
-                        photoPreview.style.display = 'block';
-                        webcam.style.display = 'none';
-                        
-                        stopCamera(); // calls stopAutoScan() inside
-                        clientLog("Access GRANTED. Scanning complete.", "success");
-                    } else {
-                        resultBox.className = 'result-container denied';
-                        document.getElementById('result-title').textContent = "Access Denied";
-                        document.getElementById('result-desc').textContent = `Biometric mismatch for user '${userId}' (d² = ${distanceSq.toFixed(4)}).`;
-                        document.getElementById('result-status').textContent = "FAIL";
-                    }
-                } catch (err) {
-                    clientLog(`Auto-scan failed: ${err.message}`, "danger");
-                } finally {
-                    isScanInProgress = false;
+                if (seconds > 0) {
+                    textSpan.textContent = `Capturing in ${seconds}...`;
+                    seconds--;
+                } else {
+                    clearInterval(countdownTimer);
+                    overlay.style.display = 'none';
+                    countdownTimerActive = false;
+                    captureSnapshot();
                 }
-            }, 2500); // Check every 2.5 seconds
-        }
-
-        function stopAutoScan() {
-            if (autoScanInterval) {
-                clearInterval(autoScanInterval);
-                autoScanInterval = null;
-                isScanInProgress = false;
-                clientLog("Auto-scanning paused.");
-            }
+            }, 1000);
         }
 
         function updateCaptureUI() {
+            const formContainer = document.getElementById('action-form-container');
             if (selectedSource === 'webcam') {
                 if (currentImageBase64) {
                     webcam.style.display = 'none';
                     photoPreview.style.display = 'block';
                     placeholder.style.display = 'none';
+                    formContainer.style.display = 'flex';
                 } else if (stream) {
                     webcam.style.display = 'block';
                     photoPreview.style.display = 'none';
                     placeholder.style.display = 'none';
+                    formContainer.style.display = 'none';
                 } else {
                     webcam.style.display = 'none';
                     photoPreview.style.display = 'none';
                     placeholder.style.display = 'flex';
+                    formContainer.style.display = 'none';
                 }
             } else {
                 webcam.style.display = 'none';
                 photoPreview.style.display = 'block';
                 placeholder.style.display = 'none';
+                formContainer.style.display = 'flex';
             }
         }
 
@@ -920,12 +870,15 @@
             (evt || window.event).currentTarget.classList.add('selected');
             selectedSource = source;
 
+            document.getElementById('action-username').value = '';
+            document.getElementById('action-password').value = '';
+
             if (source === 'webcam') {
                 currentImageBase64 = null;
                 if (!stream) {
-                    toggleCamera(); // Automatically starts camera & autoScan
+                    toggleCamera();
                 } else {
-                    startAutoScan();
+                    startCountdown();
                     updateCaptureUI();
                 }
                 btnCamera.style.display = 'inline-flex';
@@ -939,10 +892,54 @@
 
                 currentImageBase64 = PRESETS[source];
                 clientLog(`Selected preset face: ${source.toUpperCase()}`);
+                
+                document.getElementById('action-username').value = source;
+                
                 validateActionButtons();
                 updateCaptureUI();
-                runVerify();
             }
+        }
+
+        async function runVerifyFromForm() {
+            const usernameInput = document.getElementById('action-username');
+            const userId = usernameInput.value.trim();
+            if (!userId) {
+                alert("Please enter a username to verify.");
+                usernameInput.focus();
+                return;
+            }
+            document.getElementById('user-id').value = userId;
+            runVerify();
+        }
+
+        async function runEnrollFromForm() {
+            const usernameInput = document.getElementById('action-username');
+            const passwordInput = document.getElementById('action-password');
+            const userId = usernameInput.value.trim();
+            const password = passwordInput.value;
+
+            if (!userId) {
+                alert("Please enter a username to enroll.");
+                usernameInput.focus();
+                return;
+            }
+            if (!password) {
+                alert("Please enter a password to secure/update your template.");
+                passwordInput.focus();
+                return;
+            }
+
+            document.getElementById('user-id').value = userId;
+            document.getElementById('user-pw').value = password;
+            runEnroll();
+        }
+
+        function retakePhoto() {
+            currentImageBase64 = null;
+            document.getElementById('action-username').value = '';
+            document.getElementById('action-password').value = '';
+            document.getElementById('action-form-container').style.display = 'none';
+            toggleCamera();
         }
 
         async function toggleCamera() {
@@ -969,7 +966,7 @@
                 btnCamera.textContent = 'Stop Camera';
                 btnSnap.disabled = false;
                 clientLog("Webcam stream started.");
-                startAutoScan();
+                startCountdown();
                 updateCaptureUI();
             } catch (err) {
                 clientLog(`Webcam access denied or unavailable: ${err.name} - ${err.message}`, "danger");
@@ -979,13 +976,19 @@
 
         function stopCamera() {
             if (stream) {
+                if (countdownTimer) {
+                    clearInterval(countdownTimer);
+                }
+                countdownTimerActive = false;
+                const overlay = document.getElementById('countdown-overlay');
+                if (overlay) overlay.style.display = 'none';
+
                 stream.getTracks().forEach(track => track.stop());
                 stream = null;
                 webcam.srcObject = null;
                 btnCamera.textContent = 'Start Camera';
                 btnSnap.disabled = true;
                 clientLog("Webcam stream stopped.");
-                stopAutoScan();
                 updateCaptureUI();
             }
         }
@@ -1006,6 +1009,7 @@
 
             clientLog("Webcam snapshot captured successfully.");
             validateActionButtons();
+            updateCaptureUI();
         }
 
         function clientLog(text, type = "") {
