@@ -1,1023 +1,1598 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Zero-Trust Privacy-Preserving Facial Verification</title>
-<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
-<style>
-:root {
-    --bg-primary:#0a0b10; --bg-surface:rgba(20,22,32,.7); --bg-card:rgba(30,32,48,.4);
-    --border-color:rgba(255,255,255,.08); --text-primary:#f3f4f6; --text-secondary:#9ca3af;
-    --accent-primary:#6366f1; --accent-secondary:#a855f7; --success:#10b981; --danger:#ef4444;
-    --glow-indigo:rgba(99,102,241,.15); --glow-purple:rgba(168,85,247,.15);
-}
-*{box-sizing:border-box;margin:0;padding:0}
-body {
-    font-family:'Outfit',sans-serif; background-color:var(--bg-primary);
-    background-image:radial-gradient(at 0% 0%,rgba(99,102,241,.12) 0,transparent 50%),
-                     radial-gradient(at 100% 100%,rgba(168,85,247,.12) 0,transparent 50%);
-    color:var(--text-primary); min-height:100vh; display:flex; flex-direction:column; overflow-x:hidden;
-}
-header {
-    padding:2rem 4rem; display:flex; justify-content:space-between; align-items:center;
-    border-bottom:1px solid var(--border-color); backdrop-filter:blur(12px);
-    position:sticky; top:0; z-index:100; background-color:rgba(10,11,16,.7);
-}
-@media(max-width:1024px){main{grid-template-columns:1fr;padding:1.5rem}header{padding:1.5rem}}
-.logo-section h1 {
-    font-size:1.5rem; font-weight:700;
-    background:linear-gradient(135deg,var(--accent-primary),var(--accent-secondary));
-    -webkit-background-clip:text; -webkit-text-fill-color:transparent; letter-spacing:-.02em;
-}
-.logo-section p{font-size:.8rem;color:var(--text-secondary);margin-top:.2rem}
-.server-badge {
-    background-color:var(--bg-card); border:1px solid var(--border-color);
-    padding:.5rem 1rem; border-radius:99px; font-size:.85rem; display:flex; align-items:center; gap:.5rem;
-}
-.badge-dot{width:8px;height:8px;border-radius:50%;background-color:var(--success);box-shadow:0 0 10px var(--success)}
-main {
-    flex:1; padding:2.5rem 4rem; display:grid; grid-template-columns:1fr 1fr;
-    gap:2.5rem; max-width:1600px; margin:0 auto; width:100%;
-}
-.panel {
-    background:var(--bg-surface); border:1px solid var(--border-color); border-radius:24px;
-    padding:2rem; backdrop-filter:blur(20px); box-shadow:0 8px 32px rgba(0,0,0,.4);
-    display:flex; flex-direction:column; gap:1.5rem; position:relative;
-}
-.panel::before {
-    content:''; position:absolute; top:0; left:0; right:0; height:1px;
-    background:linear-gradient(90deg,transparent,rgba(255,255,255,.1),transparent);
-}
-.panel-title {
-    font-size:1.25rem; font-weight:600; display:flex; align-items:center; gap:.75rem;
-    border-bottom:1px solid var(--border-color); padding-bottom:1rem;
-}
-.panel-title span.number {
-    background:linear-gradient(135deg,var(--accent-primary),var(--accent-secondary));
-    width:24px; height:24px; border-radius:6px; display:flex; align-items:center;
-    justify-content:center; font-size:.8rem; font-weight:700;
-}
-.config-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:1rem}
-.input-group{display:flex;flex-direction:column;gap:.5rem}
-.input-group label{font-size:.85rem;color:var(--text-secondary);font-weight:500}
-select,input[type="text"],input[type="password"] {
-    background-color:rgba(10,11,16,.5); border:1px solid var(--border-color);
-    color:var(--text-primary); padding:.75rem 1rem; border-radius:12px;
-    font-family:inherit; font-size:.9rem; outline:none; transition:border-color .2s,box-shadow .2s;
-}
-select:focus,input[type="text"]:focus,input[type="password"]:focus {
-    border-color:var(--accent-primary); box-shadow:0 0 0 3px rgba(99,102,241,.2);
-}
-.capture-container {
-    width:100%; height:260px; background-color:rgba(10,11,16,.6);
-    border:1px dashed var(--border-color); border-radius:16px;
-    display:flex; flex-direction:column; align-items:center; justify-content:center;
-    position:relative; overflow:hidden;
-}
-#webcam{width:100%;height:100%;object-fit:cover;transform:scaleX(-1);display:none}
-#photo-preview{width:100%;height:100%;object-fit:contain;display:none}
-.capture-placeholder {
-    display:flex; flex-direction:column; align-items:center;
-    gap:1rem; color:var(--text-secondary); text-align:center; padding:2rem;
-}
-.capture-placeholder svg{width:48px;height:48px;stroke:var(--text-secondary);fill:none;opacity:.7}
-.capture-controls{display:flex;gap:.75rem;width:100%}
-.btn {
-    padding:.75rem 1.25rem; border-radius:12px; font-family:inherit; font-size:.9rem;
-    font-weight:600; cursor:pointer; transition:all .2s ease; border:none;
-    display:flex; align-items:center; justify-content:center; gap:.5rem;
-}
-.btn-primary{background:linear-gradient(135deg,var(--accent-primary),var(--accent-secondary));color:#fff;box-shadow:0 4px 15px rgba(99,102,241,.3)}
-.btn-primary:hover{opacity:.95;transform:translateY(-1px)}
-.btn-secondary{background-color:var(--bg-card);border:1px solid var(--border-color);color:var(--text-primary)}
-.btn-secondary:hover{background-color:rgba(255,255,255,.05);border-color:rgba(255,255,255,.15)}
-.btn:disabled{opacity:.5;cursor:not-allowed;transform:none !important;box-shadow:none !important}
-.avatar-select-container{display:flex;flex-direction:column;gap:.5rem}
-.avatar-select-container p{font-size:.85rem;color:var(--text-secondary);font-weight:500}
-.avatar-list{display:flex;gap:1rem}
-.avatar-option {
-    flex:1; background-color:var(--bg-card); border:1px solid var(--border-color);
-    padding:.75rem; border-radius:12px; cursor:pointer;
-    display:flex; flex-direction:column; align-items:center; gap:.5rem; transition:all .2s ease;
-}
-.avatar-option:hover{border-color:rgba(255,255,255,.2);background-color:rgba(255,255,255,.02)}
-.avatar-option.selected{border-color:var(--accent-primary);background-color:rgba(99,102,241,.1);box-shadow:0 0 12px rgba(99,102,241,.15)}
-.avatar-icon {
-    width:44px; height:44px; border-radius:50%;
-    background:linear-gradient(135deg,#1e293b,#0f172a);
-    display:flex; align-items:center; justify-content:center;
-    font-size:1.25rem; border:1px solid rgba(255,255,255,.05);
-}
-.avatar-name{font-size:.8rem;font-weight:600}
-.action-form-container {
-    border:1px solid var(--border-color); padding:1.25rem; border-radius:16px;
-    background-color:rgba(10,11,16,.4); display:none;
-    flex-direction:column; gap:1rem; animation:slideIn .3s cubic-bezier(.16,1,.3,1);
-}
-@keyframes slideIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
-.terminal-container {
-    background-color:#050508; border:1px solid var(--border-color); border-radius:16px;
-    padding:1rem; font-family:'JetBrains Mono',monospace; font-size:.8rem; line-height:1.5;
-    height:200px; overflow-y:auto; display:flex; flex-direction:column;
-    gap:.25rem; box-shadow:inset 0 2px 8px rgba(0,0,0,.8); word-break:break-all; white-space:pre-wrap;
-}
-.terminal-line{color:var(--text-secondary)}
-.terminal-line.success{color:var(--success)}
-.terminal-line.danger{color:var(--danger)}
-.terminal-line.info{color:#60a5fa}
-.terminal-line.timestamp{color:#4b5563}
-.result-container {
-    border-radius:16px; padding:1.5rem; display:flex; align-items:center;
-    justify-content:space-between; border:1px solid var(--border-color);
-    background-color:var(--bg-card); transition:all .3s ease;
-}
-.result-container.granted{border-color:rgba(16,185,129,.3);background:linear-gradient(135deg,rgba(16,185,129,.05),transparent);box-shadow:0 0 20px rgba(16,185,129,.05)}
-.result-container.denied{border-color:rgba(239,68,68,.3);background:linear-gradient(135deg,rgba(239,68,68,.05),transparent);box-shadow:0 0 20px rgba(239,68,68,.05)}
-.result-info{display:flex;flex-direction:column;gap:.25rem}
-.result-title{font-size:1.1rem;font-weight:600}
-.result-desc{font-size:.8rem;color:var(--text-secondary)}
-.result-status{font-size:1.5rem;font-weight:700;letter-spacing:.05em}
-.result-container.granted .result-status{color:var(--success);text-shadow:0 0 10px rgba(16,185,129,.3)}
-.result-container.denied .result-status{color:var(--danger);text-shadow:0 0 10px rgba(239,68,68,.3)}
-.progress-bar-container{width:100%;height:6px;background-color:rgba(255,255,255,.05);border-radius:99px;overflow:hidden;display:none}
-.progress-bar{height:100%;width:0%;background:linear-gradient(90deg,var(--accent-primary),var(--accent-secondary));transition:width .1s ease}
-.db-table-container{border:1px solid var(--border-color);border-radius:16px;overflow:hidden;background-color:rgba(10,11,16,.4)}
-table{width:100%;border-collapse:collapse;font-size:.85rem;text-align:left}
-th{background-color:rgba(255,255,255,.02);padding:.75rem 1rem;color:var(--text-secondary);font-weight:600;border-bottom:1px solid var(--border-color)}
-td{padding:.75rem 1rem;border-bottom:1px solid var(--border-color)}
-tr:last-child td{border-bottom:none}
-.mono{font-family:'JetBrains Mono',monospace;font-size:.75rem;color:var(--accent-primary)}
-.truncate{max-width:120px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.glow-sphere{position:absolute;border-radius:50%;filter:blur(120px);z-index:-1;opacity:.5}
-.glow-1{width:300px;height:300px;background:var(--accent-primary);top:10%;left:-150px}
-.glow-2{width:400px;height:400px;background:var(--accent-secondary);bottom:-200px;right:-200px}
-.range-container{display:flex;align-items:center;gap:1rem}
-.range-container input[type="range"]{flex:1;accent-color:var(--accent-primary)}
-.range-value{font-family:'JetBrains Mono',monospace;font-size:.85rem;min-width:40px}
-.matrix-grid{display:grid;grid-template-columns:100px 1fr 1fr;gap:6px;text-align:center;width:100%}
-.matrix-cell {
-    padding:.5rem .25rem; border-radius:8px; font-size:.75rem;
-    display:flex; flex-direction:column; align-items:center; justify-content:center;
-    border:1px solid rgba(255,255,255,.02); min-height:52px;
-}
-.matrix-cell.label{border:none;background:transparent}
-.matrix-cell.header-label,.matrix-cell.row-label{font-weight:600;color:var(--text-secondary);background-color:rgba(255,255,255,.01)}
-.matrix-cell.row-label{text-align:right;align-items:flex-end;padding-right:.75rem}
-.matrix-cell.val-cell{background-color:rgba(10,11,16,.4);border:1px solid var(--border-color)}
-.matrix-cell.val-cell .count{font-size:1.1rem;font-weight:700;color:var(--text-primary)}
-.matrix-cell.val-cell .pct{font-size:.6rem;color:var(--text-secondary);margin-top:.15rem}
-.matrix-cell.val-cell.tp,.matrix-cell.val-cell.tn{border-color:rgba(16,185,129,.25);background:linear-gradient(135deg,rgba(16,185,129,.04),transparent)}
-.matrix-cell.val-cell.tp .count,.matrix-cell.val-cell.tn .count{color:var(--success)}
-.matrix-cell.val-cell.fp,.matrix-cell.val-cell.fn{border-color:rgba(239,68,68,.25);background:linear-gradient(135deg,rgba(239,68,68,.04),transparent)}
-.matrix-cell.val-cell.fp .count,.matrix-cell.val-cell.fn .count{color:var(--danger)}
-</style>
-</head>
-<body>
-<div class="glow-sphere glow-1"></div>
-<div class="glow-sphere glow-2"></div>
-
-<header>
-    <div class="logo-section">
-        <h1>Zero-Trust Biometrics</h1>
-        <p>Privacy-Preserving Facial Verification via Additive Homomorphic Encryption</p>
-    </div>
-    <div class="server-badge">
-        <span class="badge-dot" id="server-status-dot"></span>
-        <span id="server-status-text">Connecting...</span>
-    </div>
-</header>
-
-<main>
-    <div class="panel">
-        <div class="panel-title"><span class="number">1</span>Edge Client (Device Security Boundary)</div>
-
-        <div class="config-grid">
-            <div class="input-group">
-                <label for="key-size">Paillier Key Length</label>
-                <select id="key-size">
-                    <option value="1024">1024-bit (Fast / Dev)</option>
-                    <option value="2048">2048-bit (Production Security)</option>
-                </select>
-            </div>
-            <input type="hidden" id="user-id" value="alice">
-            <input type="hidden" id="user-pw" value="">
-        </div>
-
-        <div class="input-group">
-            <label for="epsilon">Adversarial Perturbation Layer (&epsilon;)</label>
-            <div class="range-container">
-                <input type="range" id="epsilon" min="0" max="0.2" step="0.01" value="0.05">
-                <span class="range-value" id="epsilon-val">0.05</span>
-            </div>
-        </div>
-
-        <div class="avatar-select-container">
-            <p>Select Biometric Capture Mode</p>
-            <div class="avatar-list">
-                <div class="avatar-option selected" onclick="selectSource('webcam',event)">
-                    <div class="avatar-icon">📸</div><div class="avatar-name">Webcam</div><div class="avatar-role">Live Face</div>
-                </div>
-                <div class="avatar-option" onclick="selectSource('alice',event)">
-                    <div class="avatar-icon">👩</div><div class="avatar-name">Alice</div><div class="avatar-role">Enrolled</div>
-                </div>
-                <div class="avatar-option" onclick="selectSource('bob',event)">
-                    <div class="avatar-icon">👨</div><div class="avatar-name">Bob</div><div class="avatar-role">Impostor</div>
-                </div>
-            </div>
-        </div>
-
-        <div class="capture-container">
-            <video id="webcam" autoplay playsinline></video>
-            <!-- Live face-detection overlay canvas -->
-            <canvas id="face-scan-canvas" style="position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;display:none;"></canvas>
-            <!-- Face-detected badge -->
-            <div id="face-badge" style="position:absolute;bottom:10px;left:50%;transform:translateX(-50%);display:none;padding:.25rem .75rem;border-radius:99px;font-size:.7rem;font-weight:700;letter-spacing:.06em;backdrop-filter:blur(8px);"></div>
-            <img id="photo-preview" src="" alt="Captured Image">
-            <div class="capture-placeholder" id="capture-placeholder">
-                <svg viewBox="0 0 24 24" stroke-width="1.5">
-                    <path stroke-linecap="round" stroke-linejoin="round" d="M6.827 6.175A2.31 2.31 0 0 1 5.186 7.23c-.38.054-.757.112-1.134.175C2.999 7.58 2.25 8.507 2.25 9.574V18a2.25 2.25 0 0 0 2.25 2.25h15A2.25 2.25 0 0 0 21.75 18V9.574c0-1.067-.75-1.994-1.802-2.169a47.865 47.865 0 0 0-1.134-.175 2.31 2.31 0 0 1-1.64-1.055l-.822-1.316a2.192 2.192 0 0 0-1.736-1.039 48.774 48.774 0 0 0-5.232 0 2.192 2.192 0 0 0-1.736 1.039l-.821 1.316Z"/>
-                    <path stroke-linecap="round" stroke-linejoin="round" d="M16.5 12.75a4.5 4.5 0 1 1-9 0 4.5 4.5 0 0 1 9 0ZM18.75 10.5h.008v.008h-.008V10.5Z"/>
-                </svg>
-                <p>Webcam Access Ready</p>
-            </div>
-            <div id="countdown-overlay" style="display:none;position:absolute;top:0;left:0;width:100%;height:100%;background-color:rgba(0,0,0,.45);color:#fff;flex-direction:column;align-items:center;justify-content:center;font-size:1.5rem;font-weight:700;z-index:10;">
-                <div style="background:rgba(10,11,16,.9);border:1px solid var(--border-color);padding:1rem 2rem;border-radius:50px;display:flex;align-items:center;gap:.75rem;box-shadow:0 4px 20px rgba(0,0,0,.5);">
-                    <span id="countdown-text">Aligning Face...</span>
-                </div>
-            </div>
-        </div>
-
-        <div class="capture-controls" style="display:none !important;">
-            <button class="btn btn-secondary" id="btn-camera" onclick="toggleCamera()">Start Camera</button>
-            <button class="btn btn-secondary" id="btn-snap" onclick="captureSnapshot()" disabled>Snap Photo</button>
-            <button class="btn btn-primary" id="btn-enroll" onclick="runEnroll()" disabled>Enroll</button>
-            <button class="btn btn-primary" id="btn-verify" onclick="runVerify()" disabled>Verify</button>
-        </div>
-
-        <div class="action-form-container" id="action-form-container" style="display:none;">
-            <div style="font-size:.95rem;font-weight:600;color:var(--text-primary);" id="form-header-title">Biometric Capture Actions</div>
-            <p id="form-helper-text" style="font-size:.8rem;color:var(--text-secondary);margin:0;">Enter your name to proceed.</p>
-            <div class="config-grid" style="grid-template-columns:1fr;">
-                <div class="input-group" id="group-username">
-                    <label for="action-username">User Identity</label>
-                    <input type="text" id="action-username" placeholder="Username (e.g. alice)">
-                </div>
-                <div class="input-group" id="group-password" style="display:none;">
-                    <label for="action-password" id="label-password">Security PIN</label>
-                    <input type="password" id="action-password" placeholder="Enter PIN">
-                </div>
-            </div>
-            <div class="capture-controls" style="margin-top:.5rem;">
-                <button class="btn btn-primary" id="btn-proceed" style="flex:1;" onclick="handleProceedName()">Proceed</button>
-                <button class="btn btn-primary" id="btn-save-enroll" style="flex:1;display:none;background:linear-gradient(135deg,#10b981,#059669);box-shadow:0 4px 15px rgba(16,185,129,.2);" onclick="runEnrollFromForm()">Save &amp; Enroll</button>
-                <button class="btn btn-primary" id="btn-update-enroll" style="flex:1;display:none;background:linear-gradient(135deg,#f59e0b,#d97706);box-shadow:0 4px 15px rgba(245,158,11,.2);" onclick="runEnrollFromForm()">Update Enrolled Face</button>
-                <button class="btn btn-secondary" id="btn-retake" onclick="retakePhoto()">Retake Capture</button>
-            </div>
-        </div>
-
-        <div class="progress-bar-container" id="crypto-progress-container">
-            <div class="progress-bar" id="crypto-progress-bar"></div>
-        </div>
-
-        <div class="input-group">
-            <label>Edge Secure Enclave Terminal Logs</label>
-            <div class="terminal-container" id="terminal-log">
-                <div class="terminal-line info">Secure Enclave initialized. Ready.</div>
-            </div>
-        </div>
-    </div>
-
-    <div class="panel">
-        <div class="panel-title"><span class="number">2</span>Cloud Matching Engine &amp; Biometric DB</div>
-
-        <div class="result-container" id="result-box">
-            <div class="result-info">
-                <span class="result-title" id="result-title">System Idle</span>
-                <span class="result-desc" id="result-desc">Awaiting client submission.</span>
-            </div>
-            <div class="result-status" id="result-status">-</div>
-        </div>
-
-        <div class="input-group" style="margin-top:1.5rem;margin-bottom:1.5rem;">
-            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.75rem;width:100%;">
-                <label style="margin:0;font-size:.85rem;color:var(--text-secondary);">Biometric Accuracy Diagnostics (Confusion Matrix)</label>
-                <button class="btn btn-secondary" style="padding:.2rem .6rem;font-size:.7rem;height:auto;" onclick="resetConfusionMatrix()">Reset Stats</button>
-            </div>
-            <div class="matrix-grid">
-                <div class="matrix-cell label"></div>
-                <div class="matrix-cell header-label">Predicted Match (PASS)</div>
-                <div class="matrix-cell header-label">Predicted Mismatch (FAIL)</div>
-                <div class="matrix-cell row-label">Actual Match</div>
-                <div class="matrix-cell val-cell tp" id="matrix-tp"><span class="count">0</span><span class="pct">True Positive (TP)</span></div>
-                <div class="matrix-cell val-cell fn" id="matrix-fn"><span class="count">0</span><span class="pct">False Negative (FN)</span></div>
-                <div class="matrix-cell row-label">Actual Mismatch</div>
-                <div class="matrix-cell val-cell fp" id="matrix-fp"><span class="count">0</span><span class="pct">False Positive (FP)</span></div>
-                <div class="matrix-cell val-cell tn" id="matrix-tn"><span class="count">0</span><span class="pct">True Negative (TN)</span></div>
-            </div>
-            <div style="margin-top:.75rem;display:flex;gap:1.5rem;font-size:.8rem;color:var(--text-secondary);padding-left:.25rem;">
-                <div>Accuracy: <span id="metric-accuracy" style="font-weight:600;color:var(--text-primary);">-</span></div>
-                <div>FAR: <span id="metric-far" style="font-weight:600;color:var(--danger);">-</span></div>
-                <div>FRR: <span id="metric-frr" style="font-weight:600;color:var(--danger);">-</span></div>
-                <div>F1 Score: <span id="metric-f1" style="font-weight:600;color:var(--accent-primary);">-</span></div>
-            </div>
-        </div>
-
-        <div class="input-group">
-            <label>Enrolled Ciphertext Template Registry (Vercel KV)</label>
-            <div class="db-table-container">
-                <table>
-                    <thead><tr><th>User ID</th><th>Public Key n (Modulus)</th><th>Encrypted Vector (Ciphertext)</th><th>Encrypted Norm term</th></tr></thead>
-                    <tbody id="db-body">
-                        <tr><td colspan="4" style="text-align:center;color:var(--text-secondary);padding:2rem;">No enrolled templates in this session.</td></tr>
-                    </tbody>
-                </table>
-            </div>
-        </div>
-
-        <div class="config-grid" style="grid-template-columns:1fr;">
-            <div class="server-badge" style="justify-content:center;font-size:.85rem;padding:.75rem;">
-                <span>Active Storage backend: </span>
-                <strong class="mono" id="db-type">InMemoryStore</strong>
-                <span>| Enrolled count: </span>
-                <strong class="mono" id="db-count">0</strong>
-            </div>
-        </div>
-
-        <div class="terminal-container" id="server-terminal-log" style="height:250px;">
-            <div class="terminal-line info">Cloud matching server ready. Invariant: Private key never exits client.</div>
-        </div>
-    </div>
-</main>
-
-<script>
-    let stream = null, selectedSource = 'webcam', currentImageBase64 = null;
-    let serverUrl = window.location.origin;
-    let public_key_n = null, private_key_p = null, private_key_q = null;
-    const SCALE = 1000000n, SCALE_SQ = 1000000000000n;
-    let matrixStats = { tp:0, tn:0, fp:0, fn:0 };
-    let webcamActualUser = "alice";
-    let countdownTimer = null, countdownTimerActive = false;
-    let isUpdateMode = false, lastEnteredUsername = "";
-
-    const PRESETS = {
-        alice: `data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 160" width="160" height="160"><rect width="100%" height="100%" fill="%231e1e2f"/><circle cx="80" cy="75" r="35" fill="%23fbcfe8"/><path d="M40 135c0-20 20-30 40-30s40 10 40 30" fill="%23fbcfe8"/><path d="M50 70c0 0 10-15 30-15s30 15 30 15" stroke="%23db2777" stroke-width="6" fill="none"/><circle cx="70" cy="75" r="4" fill="%231e1e2f"/><circle cx="90" cy="75" r="4" fill="%231e1e2f"/><path d="M72 90q8 4 16 0" stroke="%23db2777" stroke-width="3" fill="none"/></svg>`,
-        bob: `data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 160" width="160" height="160"><rect width="100%" height="100%" fill="%231e1e2f"/><circle cx="80" cy="75" r="35" fill="%23fed7aa"/><path d="M40 135c0-20 20-30 40-30s40 10 40 30" fill="%23fed7aa"/><rect x="55" y="45" width="50" height="20" fill="%2378350f"/><circle cx="70" cy="75" r="4" fill="%231e1e2f"/><circle cx="90" cy="75" r="4" fill="%231e1e2f"/><path d="M72 88q8 3 16 0" stroke="%239a3412" stroke-width="3" fill="none"/></svg>`
-    };
-
-    const webcam = document.getElementById('webcam');
-    const photoPreview = document.getElementById('photo-preview');
-    const placeholder = document.getElementById('capture-placeholder');
-    const btnCamera = document.getElementById('btn-camera');
-    const btnSnap = document.getElementById('btn-snap');
-    const btnEnroll = document.getElementById('btn-enroll');
-    const btnVerify = document.getElementById('btn-verify');
-    const epsilonInput = document.getElementById('epsilon');
-    const epsilonVal = document.getElementById('epsilon-val');
-    const logContainer = document.getElementById('terminal-log');
-    const serverLogContainer = document.getElementById('server-terminal-log');
-
-    epsilonInput.addEventListener('input', e => epsilonVal.textContent = e.target.value);
-
-    function gid(id) { return document.getElementById(id); }
-    function setDisplay(id, val) { gid(id).style.display = val; }
-
-    function bigintModPow(base, exp, mod) {
-        let res = 1n;
-        base = BigInt(base) % BigInt(mod);
-        exp = BigInt(exp);
-        const m = BigInt(mod);
-        while (exp > 0n) {
-            if (exp % 2n === 1n) res = (res * base) % m;
-            base = (base * base) % m;
-            exp = exp / 2n;
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Zero-Trust Privacy-Preserving Facial Verification</title>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap"
+        rel="stylesheet">
+    <style>
+        :root {
+            --bg-primary: #0a0b10;
+            --bg-surface: rgba(20, 22, 32, .7);
+            --bg-card: rgba(30, 32, 48, .4);
+            --border-color: rgba(255, 255, 255, .08);
+            --text-primary: #f3f4f6;
+            --text-secondary: #9ca3af;
+            --accent-primary: #6366f1;
+            --accent-secondary: #a855f7;
+            --success: #10b981;
+            --danger: #ef4444;
+            --glow-indigo: rgba(99, 102, 241, .15);
+            --glow-purple: rgba(168, 85, 247, .15);
         }
-        return res;
-    }
 
-    function modInverse(a, m) {
-        let m0 = m, y = 0n, x = 1n;
-        if (m === 1n) return 0n;
-        while (a > 1n) {
-            const q = a / m, t = m;
-            m = a % m; a = t;
-            const t2 = y; y = x - q * y; x = t2;
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0
         }
-        return x < 0n ? x + m0 : x;
-    }
 
-    function makeLog(container) {
-        return (text, type = "") => {
-            const div = document.createElement('div');
-            div.className = `terminal-line ${type}`;
-            div.innerHTML = `<span class="timestamp">[${new Date().toLocaleTimeString()}]</span> ${text}`;
-            container.appendChild(div);
-            container.scrollTop = container.scrollHeight;
-        };
-    }
-    const clientLog = makeLog(logContainer);
-    const serverLog = makeLog(serverLogContainer);
+        body {
+            font-family: 'Outfit', sans-serif;
+            background-color: var(--bg-primary);
+            background-image: radial-gradient(at 0% 0%, rgba(99, 102, 241, .12) 0, transparent 50%),
+                radial-gradient(at 100% 100%, rgba(168, 85, 247, .12) 0, transparent 50%);
+            color: var(--text-primary);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            overflow-x: hidden;
+        }
 
-    function validateActionButtons() {
-        const hasKey = public_key_n !== null;
-        const hasImage = currentImageBase64 !== null || (selectedSource === 'webcam' && stream !== null);
-        btnEnroll.disabled = !(hasKey && hasImage);
-        btnVerify.disabled = !(hasKey && hasImage);
-        document.querySelectorAll('.action-form-container .btn').forEach(b => b.disabled = false);
-    }
+        header {
+            padding: 2rem 4rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid var(--border-color);
+            backdrop-filter: blur(12px);
+            position: sticky;
+            top: 0;
+            z-index: 100;
+            background-color: rgba(10, 11, 16, .7);
+        }
 
-    function resetFormState() {
-        isUpdateMode = false; lastEnteredUsername = "";
-        gid('action-username').value = '';
-        gid('action-password').value = '';
-        setDisplay('group-password', 'none');
-        setDisplay('btn-proceed', 'block');
-        setDisplay('btn-save-enroll', 'none');
-        setDisplay('btn-update-enroll', 'none');
-        gid('form-helper-text').innerHTML = 'Enter your name to proceed.';
-        document.querySelectorAll('.action-form-container .btn').forEach(b => b.disabled = false);
-    }
-
-    function updateConfusionMatrixUI() {
-        ['tp','tn','fp','fn'].forEach(k => gid(`matrix-${k}`).querySelector('.count').textContent = matrixStats[k]);
-        const total = matrixStats.tp + matrixStats.tn + matrixStats.fp + matrixStats.fn;
-        if (total === 0) { ['metric-accuracy','metric-far','metric-frr','metric-f1'].forEach(id => gid(id).textContent = '-'); return; }
-        gid('metric-accuracy').textContent = (((matrixStats.tp + matrixStats.tn) / total) * 100).toFixed(1) + '%';
-        const mismatch = matrixStats.fp + matrixStats.tn;
-        gid('metric-far').textContent = mismatch > 0 ? ((matrixStats.fp / mismatch) * 100).toFixed(1) + '%' : '0.0%';
-        const match = matrixStats.tp + matrixStats.fn;
-        gid('metric-frr').textContent = match > 0 ? ((matrixStats.fn / match) * 100).toFixed(1) + '%' : '0.0%';
-        const f1Denom = 2 * matrixStats.tp + matrixStats.fp + matrixStats.fn;
-        gid('metric-f1').textContent = f1Denom > 0 ? ((2 * matrixStats.tp / f1Denom)).toFixed(3) : '0.000';
-    }
-
-    function resetConfusionMatrix() {
-        matrixStats = { tp:0, tn:0, fp:0, fn:0 };
-        updateConfusionMatrixUI();
-        clientLog("Confusion matrix statistics reset.");
-    }
-
-    function showUpdatePrompt() {
-        setDisplay('group-password', 'flex');
-        gid('label-password').textContent = "Enter PIN to change saved image";
-        gid('action-password').placeholder = "Enter security PIN";
-        gid('form-helper-text').innerHTML = `<span style="color:var(--danger)">Verification Failed.</span> To change the saved image, capture a new image and enter the PIN, then only changing is allowed.`;
-        setDisplay('btn-proceed', 'none');
-        setDisplay('btn-save-enroll', 'none');
-        setDisplay('btn-update-enroll', 'block');
-    }
-
-    let faceScanInterval = null;
-    let faceScanPulse = 0;
-    let faceDetectedFrames = 0;  // consecutive frames with face detected
-    const FACE_CONFIRM_FRAMES = 2; // capture after this many consecutive detections
-
-    async function startFaceScan() {
-        const canvas = gid('face-scan-canvas');
-        const badge  = gid('face-badge');
-        const textSpan = gid('countdown-text');
-        if (!canvas || !webcam) return;
-        canvas.width  = webcam.videoWidth  || 400;
-        canvas.height = webcam.videoHeight || 300;
-        canvas.style.display = 'block';
-        badge.style.display  = 'block';
-        faceDetectedFrames = 0;
-
-        faceScanInterval = setInterval(async () => {
-            if (!stream) { stopFaceScan(); return; }
-            const ctx = canvas.getContext('2d');
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
-            faceScanPulse = (faceScanPulse + 1) % 20;
-            const pulse = 0.55 + Math.sin(faceScanPulse / 20 * Math.PI * 2) * 0.25;
-
-            if ('FaceDetector' in window) {
-                try {
-                    const tmp = document.createElement('canvas');
-                    tmp.width = webcam.videoWidth || 400; tmp.height = webcam.videoHeight || 300;
-                    const tctx = tmp.getContext('2d');
-                    tctx.translate(tmp.width, 0); tctx.scale(-1, 1);
-                    tctx.drawImage(webcam, 0, 0, tmp.width, tmp.height);
-
-                    const faces = await new FaceDetector({ fastMode:true, maxDetectedFaces:1 }).detect(tmp);
-                    if (faces.length > 0) {
-                        faceDetectedFrames++;
-                        const b = faces[0].boundingBox;
-                        const pad = Math.max(b.width, b.height) * 0.35;
-                        const cx = Math.max(0, b.x - pad), cy = Math.max(0, b.y - pad * 1.2);
-                        const cw = Math.min(tmp.width,  b.x + b.width  + pad) - cx;
-                        const ch = Math.min(tmp.height, b.y + b.height + pad) - cy;
-
-                        // Draw pulsing crop box
-                        ctx.save();
-                        ctx.strokeStyle = `rgba(16,185,129,${pulse})`;
-                        ctx.lineWidth = 2.5;
-                        ctx.shadowColor = 'rgba(16,185,129,.7)';
-                        ctx.shadowBlur = 8;
-                        ctx.strokeRect(cx, cy, cw, ch);
-                        // Corner accents
-                        const cs = 14;
-                        ctx.lineWidth = 3.5;
-                        [[cx,cy],[cx+cw,cy],[cx,cy+ch],[cx+cw,cy+ch]].forEach(([x,y],i) => {
-                            ctx.beginPath();
-                            ctx.moveTo(x + (i%2===0?0:-cs), y); ctx.lineTo(x + (i%2===0?cs:-cs), y);
-                            ctx.moveTo(x, y + (i<2?0:-cs)); ctx.lineTo(x, y + (i<2?cs:-cs));
-                            ctx.stroke();
-                        });
-                        ctx.restore();
-
-                        if (faceDetectedFrames >= FACE_CONFIRM_FRAMES) {
-                            // Face stably detected — capture immediately
-                            badge.textContent = '✓ Face detected! Capturing...';
-                            badge.style.background = 'rgba(16,185,129,.25)';
-                            badge.style.border = '1px solid rgba(16,185,129,.6)';
-                            badge.style.color = '#10b981';
-                            if (textSpan) textSpan.textContent = 'Face detected! Capturing...';
-                            stopFaceScan();
-                            await captureSnapshot();
-                        } else {
-                            badge.textContent = '✓ FACE DETECTED — Hold still...';
-                            badge.style.background = 'rgba(16,185,129,.15)';
-                            badge.style.border = '1px solid rgba(16,185,129,.4)';
-                            badge.style.color = '#10b981';
-                            if (textSpan) textSpan.textContent = 'Face detected — Hold still...';
-                        }
-                    } else {
-                        faceDetectedFrames = 0; // reset streak
-                        drawNoFaceBox(ctx, canvas, pulse);
-                        badge.textContent = '⚠ No face — align your face to the camera';
-                        badge.style.background = 'rgba(245,158,11,.12)';
-                        badge.style.border = '1px solid rgba(245,158,11,.35)';
-                        badge.style.color = '#f59e0b';
-                        if (textSpan) textSpan.textContent = 'Align your face...';
-                    }
-                } catch(e) { drawNoFaceBox(ctx, canvas, pulse); }
-            } else {
-                // No FaceDetector API — draw centre-crop box and auto-capture after 1 s
-                drawNoFaceBox(ctx, canvas, pulse);
-                badge.textContent = 'ℹ CENTRE CROP ACTIVE — capturing shortly...';
-                badge.style.background = 'rgba(99,102,241,.12)';
-                badge.style.border = '1px solid rgba(99,102,241,.3)';
-                badge.style.color = 'var(--accent-primary)';
-                if (textSpan) textSpan.textContent = 'Align your face...';
-                faceDetectedFrames++;
-                if (faceDetectedFrames >= 4) { // ~1.2 s settle time
-                    stopFaceScan();
-                    await captureSnapshot();
-                }
+        @media(max-width:1024px) {
+            main {
+                grid-template-columns: 1fr;
+                padding: 1.5rem
             }
-        }, 300);
-    }
 
-    function drawNoFaceBox(ctx, canvas, pulse) {
-        const side = Math.min(canvas.width, canvas.height) * 0.72;
-        const cx = (canvas.width  - side) / 2;
-        const cy = (canvas.height - side) / 2 - canvas.height * 0.04;
-        ctx.save();
-        ctx.strokeStyle = `rgba(99,102,241,${pulse})`;
-        ctx.lineWidth = 2; ctx.setLineDash([6,4]);
-        ctx.shadowColor = 'rgba(99,102,241,.5)'; ctx.shadowBlur = 6;
-        ctx.strokeRect(cx, cy, side, side);
-        ctx.restore();
-    }
+            header {
+                padding: 1.5rem
+            }
+        }
 
-    function stopFaceScan() {
-        clearInterval(faceScanInterval); faceScanInterval = null;
-        faceDetectedFrames = 0;
-        const canvas = gid('face-scan-canvas'), badge = gid('face-badge');
-        if (canvas) { canvas.getContext('2d').clearRect(0,0,canvas.width,canvas.height); canvas.style.display='none'; }
-        if (badge) badge.style.display = 'none';
-    }
+        .logo-section h1 {
+            font-size: 1.5rem;
+            font-weight: 700;
+            background: linear-gradient(135deg, var(--accent-primary), var(--accent-secondary));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            letter-spacing: -.02em;
+        }
 
-    function startFaceWatch() {
-        if (faceScanInterval) return; // already watching
-        const overlay = gid('countdown-overlay'), textSpan = gid('countdown-text');
-        overlay.style.display = 'flex';
-        if (textSpan) textSpan.textContent = 'Align your face...';
-        startFaceScan();
-    }
+        .logo-section p {
+            font-size: .8rem;
+            color: var(--text-secondary);
+            margin-top: .2rem
+        }
 
-    function updateCaptureUI() {
-        const formContainer = gid('action-form-container');
-        if (selectedSource === 'webcam') {
-            if (currentImageBase64) {
+        .server-badge {
+            background-color: var(--bg-card);
+            border: 1px solid var(--border-color);
+            padding: .5rem 1rem;
+            border-radius: 99px;
+            font-size: .85rem;
+            display: flex;
+            align-items: center;
+            gap: .5rem;
+        }
+
+        .badge-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background-color: var(--success);
+            box-shadow: 0 0 10px var(--success)
+        }
+
+        main {
+            flex: 1;
+            padding: 2.5rem 4rem;
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 2.5rem;
+            max-width: 1600px;
+            margin: 0 auto;
+            width: 100%;
+        }
+
+        .panel {
+            background: var(--bg-surface);
+            border: 1px solid var(--border-color);
+            border-radius: 24px;
+            padding: 2rem;
+            backdrop-filter: blur(20px);
+            box-shadow: 0 8px 32px rgba(0, 0, 0, .4);
+            display: flex;
+            flex-direction: column;
+            gap: 1.5rem;
+            position: relative;
+        }
+
+        .panel::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 1px;
+            background: linear-gradient(90deg, transparent, rgba(255, 255, 255, .1), transparent);
+        }
+
+        .panel-title {
+            font-size: 1.25rem;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: .75rem;
+            border-bottom: 1px solid var(--border-color);
+            padding-bottom: 1rem;
+        }
+
+        .panel-title span.number {
+            background: linear-gradient(135deg, var(--accent-primary), var(--accent-secondary));
+            width: 24px;
+            height: 24px;
+            border-radius: 6px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: .8rem;
+            font-weight: 700;
+        }
+
+        .config-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+            gap: 1rem
+        }
+
+        .input-group {
+            display: flex;
+            flex-direction: column;
+            gap: .5rem
+        }
+
+        .input-group label {
+            font-size: .85rem;
+            color: var(--text-secondary);
+            font-weight: 500
+        }
+
+        select,
+        input[type="text"],
+        input[type="password"] {
+            background-color: rgba(10, 11, 16, .5);
+            border: 1px solid var(--border-color);
+            color: var(--text-primary);
+            padding: .75rem 1rem;
+            border-radius: 12px;
+            font-family: inherit;
+            font-size: .9rem;
+            outline: none;
+            transition: border-color .2s, box-shadow .2s;
+        }
+
+        select:focus,
+        input[type="text"]:focus,
+        input[type="password"]:focus {
+            border-color: var(--accent-primary);
+            box-shadow: 0 0 0 3px rgba(99, 102, 241, .2);
+        }
+
+        .capture-container {
+            width: 100%;
+            height: 260px;
+            background-color: rgba(10, 11, 16, .6);
+            border: 1px dashed var(--border-color);
+            border-radius: 16px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+            overflow: hidden;
+        }
+
+        #webcam {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            transform: scaleX(-1);
+            display: none
+        }
+
+        #photo-preview {
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+            display: none
+        }
+
+        .capture-placeholder {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 1rem;
+            color: var(--text-secondary);
+            text-align: center;
+            padding: 2rem;
+        }
+
+        .capture-placeholder svg {
+            width: 48px;
+            height: 48px;
+            stroke: var(--text-secondary);
+            fill: none;
+            opacity: .7
+        }
+
+        .capture-controls {
+            display: flex;
+            gap: .75rem;
+            width: 100%
+        }
+
+        .btn {
+            padding: .75rem 1.25rem;
+            border-radius: 12px;
+            font-family: inherit;
+            font-size: .9rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all .2s ease;
+            border: none;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: .5rem;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, var(--accent-primary), var(--accent-secondary));
+            color: #fff;
+            box-shadow: 0 4px 15px rgba(99, 102, 241, .3)
+        }
+
+        .btn-primary:hover {
+            opacity: .95;
+            transform: translateY(-1px)
+        }
+
+        .btn-secondary {
+            background-color: var(--bg-card);
+            border: 1px solid var(--border-color);
+            color: var(--text-primary)
+        }
+
+        .btn-secondary:hover {
+            background-color: rgba(255, 255, 255, .05);
+            border-color: rgba(255, 255, 255, .15)
+        }
+
+        .btn:disabled {
+            opacity: .5;
+            cursor: not-allowed;
+            transform: none !important;
+            box-shadow: none !important
+        }
+
+        .avatar-select-container {
+            display: flex;
+            flex-direction: column;
+            gap: .5rem
+        }
+
+        .avatar-select-container p {
+            font-size: .85rem;
+            color: var(--text-secondary);
+            font-weight: 500
+        }
+
+        .avatar-list {
+            display: flex;
+            gap: 1rem
+        }
+
+        .avatar-option {
+            flex: 1;
+            background-color: var(--bg-card);
+            border: 1px solid var(--border-color);
+            padding: .75rem;
+            border-radius: 12px;
+            cursor: pointer;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: .5rem;
+            transition: all .2s ease;
+        }
+
+        .avatar-option:hover {
+            border-color: rgba(255, 255, 255, .2);
+            background-color: rgba(255, 255, 255, .02)
+        }
+
+        .avatar-option.selected {
+            border-color: var(--accent-primary);
+            background-color: rgba(99, 102, 241, .1);
+            box-shadow: 0 0 12px rgba(99, 102, 241, .15)
+        }
+
+        .avatar-icon {
+            width: 44px;
+            height: 44px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #1e293b, #0f172a);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.25rem;
+            border: 1px solid rgba(255, 255, 255, .05);
+        }
+
+        .avatar-name {
+            font-size: .8rem;
+            font-weight: 600
+        }
+
+        .action-form-container {
+            border: 1px solid var(--border-color);
+            padding: 1.25rem;
+            border-radius: 16px;
+            background-color: rgba(10, 11, 16, .4);
+            display: none;
+            flex-direction: column;
+            gap: 1rem;
+            animation: slideIn .3s cubic-bezier(.16, 1, .3, 1);
+        }
+
+        @keyframes slideIn {
+            from {
+                opacity: 0;
+                transform: translateY(8px)
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0)
+            }
+        }
+
+        .terminal-container {
+            background-color: #050508;
+            border: 1px solid var(--border-color);
+            border-radius: 16px;
+            padding: 1rem;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: .8rem;
+            line-height: 1.5;
+            height: 200px;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: .25rem;
+            box-shadow: inset 0 2px 8px rgba(0, 0, 0, .8);
+            word-break: break-all;
+            white-space: pre-wrap;
+        }
+
+        .terminal-line {
+            color: var(--text-secondary)
+        }
+
+        .terminal-line.success {
+            color: var(--success)
+        }
+
+        .terminal-line.danger {
+            color: var(--danger)
+        }
+
+        .terminal-line.info {
+            color: #60a5fa
+        }
+
+        .terminal-line.timestamp {
+            color: #4b5563
+        }
+
+        .result-container {
+            border-radius: 16px;
+            padding: 1.5rem;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            border: 1px solid var(--border-color);
+            background-color: var(--bg-card);
+            transition: all .3s ease;
+        }
+
+        .result-container.granted {
+            border-color: rgba(16, 185, 129, .3);
+            background: linear-gradient(135deg, rgba(16, 185, 129, .05), transparent);
+            box-shadow: 0 0 20px rgba(16, 185, 129, .05)
+        }
+
+        .result-container.denied {
+            border-color: rgba(239, 68, 68, .3);
+            background: linear-gradient(135deg, rgba(239, 68, 68, .05), transparent);
+            box-shadow: 0 0 20px rgba(239, 68, 68, .05)
+        }
+
+        .result-info {
+            display: flex;
+            flex-direction: column;
+            gap: .25rem
+        }
+
+        .result-title {
+            font-size: 1.1rem;
+            font-weight: 600
+        }
+
+        .result-desc {
+            font-size: .8rem;
+            color: var(--text-secondary)
+        }
+
+        .result-status {
+            font-size: 1.5rem;
+            font-weight: 700;
+            letter-spacing: .05em
+        }
+
+        .result-container.granted .result-status {
+            color: var(--success);
+            text-shadow: 0 0 10px rgba(16, 185, 129, .3)
+        }
+
+        .result-container.denied .result-status {
+            color: var(--danger);
+            text-shadow: 0 0 10px rgba(239, 68, 68, .3)
+        }
+
+        .progress-bar-container {
+            width: 100%;
+            height: 6px;
+            background-color: rgba(255, 255, 255, .05);
+            border-radius: 99px;
+            overflow: hidden;
+            display: none
+        }
+
+        .progress-bar {
+            height: 100%;
+            width: 0%;
+            background: linear-gradient(90deg, var(--accent-primary), var(--accent-secondary));
+            transition: width .1s ease
+        }
+
+        .db-table-container {
+            border: 1px solid var(--border-color);
+            border-radius: 16px;
+            overflow: hidden;
+            background-color: rgba(10, 11, 16, .4)
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: .85rem;
+            text-align: left
+        }
+
+        th {
+            background-color: rgba(255, 255, 255, .02);
+            padding: .75rem 1rem;
+            color: var(--text-secondary);
+            font-weight: 600;
+            border-bottom: 1px solid var(--border-color)
+        }
+
+        td {
+            padding: .75rem 1rem;
+            border-bottom: 1px solid var(--border-color)
+        }
+
+        tr:last-child td {
+            border-bottom: none
+        }
+
+        .mono {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: .75rem;
+            color: var(--accent-primary)
+        }
+
+        .truncate {
+            max-width: 120px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis
+        }
+
+        .glow-sphere {
+            position: absolute;
+            border-radius: 50%;
+            filter: blur(120px);
+            z-index: -1;
+            opacity: .5
+        }
+
+        .glow-1 {
+            width: 300px;
+            height: 300px;
+            background: var(--accent-primary);
+            top: 10%;
+            left: -150px
+        }
+
+        .glow-2 {
+            width: 400px;
+            height: 400px;
+            background: var(--accent-secondary);
+            bottom: -200px;
+            right: -200px
+        }
+
+        .range-container {
+            display: flex;
+            align-items: center;
+            gap: 1rem
+        }
+
+        .range-container input[type="range"] {
+            flex: 1;
+            accent-color: var(--accent-primary)
+        }
+
+        .range-value {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: .85rem;
+            min-width: 40px
+        }
+
+        .matrix-grid {
+            display: grid;
+            grid-template-columns: 100px 1fr 1fr;
+            gap: 6px;
+            text-align: center;
+            width: 100%
+        }
+
+        .matrix-cell {
+            padding: .5rem .25rem;
+            border-radius: 8px;
+            font-size: .75rem;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            border: 1px solid rgba(255, 255, 255, .02);
+            min-height: 52px;
+        }
+
+        .matrix-cell.label {
+            border: none;
+            background: transparent
+        }
+
+        .matrix-cell.header-label,
+        .matrix-cell.row-label {
+            font-weight: 600;
+            color: var(--text-secondary);
+            background-color: rgba(255, 255, 255, .01)
+        }
+
+        .matrix-cell.row-label {
+            text-align: right;
+            align-items: flex-end;
+            padding-right: .75rem
+        }
+
+        .matrix-cell.val-cell {
+            background-color: rgba(10, 11, 16, .4);
+            border: 1px solid var(--border-color)
+        }
+
+        .matrix-cell.val-cell .count {
+            font-size: 1.1rem;
+            font-weight: 700;
+            color: var(--text-primary)
+        }
+
+        .matrix-cell.val-cell .pct {
+            font-size: .6rem;
+            color: var(--text-secondary);
+            margin-top: .15rem
+        }
+
+        .matrix-cell.val-cell.tp,
+        .matrix-cell.val-cell.tn {
+            border-color: rgba(16, 185, 129, .25);
+            background: linear-gradient(135deg, rgba(16, 185, 129, .04), transparent)
+        }
+
+        .matrix-cell.val-cell.tp .count,
+        .matrix-cell.val-cell.tn .count {
+            color: var(--success)
+        }
+
+        .matrix-cell.val-cell.fp,
+        .matrix-cell.val-cell.fn {
+            border-color: rgba(239, 68, 68, .25);
+            background: linear-gradient(135deg, rgba(239, 68, 68, .04), transparent)
+        }
+
+        .matrix-cell.val-cell.fp .count,
+        .matrix-cell.val-cell.fn .count {
+            color: var(--danger)
+        }
+    </style>
+</head>
+
+<body>
+    <div class="glow-sphere glow-1"></div>
+    <div class="glow-sphere glow-2"></div>
+
+    <header>
+        <div class="logo-section">
+            <h1>Zero-Trust Biometrics</h1>
+            <p>Privacy-Preserving Facial Verification via Additive Homomorphic Encryption</p>
+        </div>
+        <div class="server-badge">
+            <span class="badge-dot" id="server-status-dot"></span>
+            <span id="server-status-text">Connecting...</span>
+        </div>
+    </header>
+
+    <main>
+        <div class="panel">
+            <div class="panel-title"><span class="number">1</span>Edge Client (Device Security Boundary)</div>
+
+            <div class="config-grid">
+                <div class="input-group">
+                    <label for="key-size">Paillier Key Length</label>
+                    <select id="key-size">
+                        <option value="1024">1024-bit (Fast / Dev)</option>
+                        <option value="2048">2048-bit (Production Security)</option>
+                    </select>
+                </div>
+                <input type="hidden" id="user-id" value="alice">
+                <input type="hidden" id="user-pw" value="">
+            </div>
+
+            <div class="input-group">
+                <label for="epsilon">Adversarial Perturbation Layer (&epsilon;)</label>
+                <div class="range-container">
+                    <input type="range" id="epsilon" min="0" max="0.2" step="0.01" value="0.05">
+                    <span class="range-value" id="epsilon-val">0.05</span>
+                </div>
+            </div>
+
+            <div class="avatar-select-container">
+                <p>Select Biometric Capture Mode</p>
+                <div class="avatar-list">
+                    <div class="avatar-option selected" onclick="selectSource('webcam',event)">
+                        <div class="avatar-icon">📸</div>
+                        <div class="avatar-name">Webcam</div>
+                        <div class="avatar-role">Live Face</div>
+                    </div>
+                    <div class="avatar-option" onclick="selectSource('alice',event)">
+                        <div class="avatar-icon">👩</div>
+                        <div class="avatar-name">Alice</div>
+                        <div class="avatar-role">Enrolled</div>
+                    </div>
+                    <div class="avatar-option" onclick="selectSource('bob',event)">
+                        <div class="avatar-icon">👨</div>
+                        <div class="avatar-name">Bob</div>
+                        <div class="avatar-role">Impostor</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="capture-container">
+                <video id="webcam" autoplay playsinline></video>
+                <!-- Live face-detection overlay canvas -->
+                <canvas id="face-scan-canvas"
+                    style="position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;display:none;"></canvas>
+                <!-- Face-detected badge -->
+                <div id="face-badge"
+                    style="position:absolute;bottom:10px;left:50%;transform:translateX(-50%);display:none;padding:.25rem .75rem;border-radius:99px;font-size:.7rem;font-weight:700;letter-spacing:.06em;backdrop-filter:blur(8px);">
+                </div>
+                <img id="photo-preview" src="" alt="Captured Image">
+                <div class="capture-placeholder" id="capture-placeholder">
+                    <svg viewBox="0 0 24 24" stroke-width="1.5">
+                        <path stroke-linecap="round" stroke-linejoin="round"
+                            d="M6.827 6.175A2.31 2.31 0 0 1 5.186 7.23c-.38.054-.757.112-1.134.175C2.999 7.58 2.25 8.507 2.25 9.574V18a2.25 2.25 0 0 0 2.25 2.25h15A2.25 2.25 0 0 0 21.75 18V9.574c0-1.067-.75-1.994-1.802-2.169a47.865 47.865 0 0 0-1.134-.175 2.31 2.31 0 0 1-1.64-1.055l-.822-1.316a2.192 2.192 0 0 0-1.736-1.039 48.774 48.774 0 0 0-5.232 0 2.192 2.192 0 0 0-1.736 1.039l-.821 1.316Z" />
+                        <path stroke-linecap="round" stroke-linejoin="round"
+                            d="M16.5 12.75a4.5 4.5 0 1 1-9 0 4.5 4.5 0 0 1 9 0ZM18.75 10.5h.008v.008h-.008V10.5Z" />
+                    </svg>
+                    <p>Webcam Access Ready</p>
+                </div>
+                <div id="countdown-overlay"
+                    style="display:none;position:absolute;top:0;left:0;width:100%;height:100%;background-color:rgba(0,0,0,.45);color:#fff;flex-direction:column;align-items:center;justify-content:center;font-size:1.5rem;font-weight:700;z-index:10;">
+                    <div
+                        style="background:rgba(10,11,16,.9);border:1px solid var(--border-color);padding:1rem 2rem;border-radius:50px;display:flex;align-items:center;gap:.75rem;box-shadow:0 4px 20px rgba(0,0,0,.5);">
+                        <span id="countdown-text">Aligning Face...</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="capture-controls" style="display:none !important;">
+                <button class="btn btn-secondary" id="btn-camera" onclick="toggleCamera()">Start Camera</button>
+                <button class="btn btn-secondary" id="btn-snap" onclick="captureSnapshot()" disabled>Snap Photo</button>
+                <button class="btn btn-primary" id="btn-enroll" onclick="runEnroll()" disabled>Enroll</button>
+                <button class="btn btn-primary" id="btn-verify" onclick="runVerify()" disabled>Verify</button>
+            </div>
+
+            <div class="action-form-container" id="action-form-container" style="display:none;">
+                <div style="font-size:.95rem;font-weight:600;color:var(--text-primary);" id="form-header-title">
+                    Biometric Capture Actions</div>
+                <p id="form-helper-text" style="font-size:.8rem;color:var(--text-secondary);margin:0;">Enter your name
+                    to proceed.</p>
+                <div class="config-grid" style="grid-template-columns:1fr;">
+                    <div class="input-group" id="group-username">
+                        <label for="action-username">User Identity</label>
+                        <input type="text" id="action-username" placeholder="Username (e.g. alice)">
+                    </div>
+                    <div class="input-group" id="group-password" style="display:none;">
+                        <label for="action-password" id="label-password">Security PIN</label>
+                        <input type="password" id="action-password" placeholder="Enter PIN">
+                    </div>
+                </div>
+                <div class="capture-controls" style="margin-top:.5rem;">
+                    <button class="btn btn-primary" id="btn-proceed" style="flex:1;"
+                        onclick="handleProceedName()">Proceed</button>
+                    <button class="btn btn-primary" id="btn-save-enroll"
+                        style="flex:1;display:none;background:linear-gradient(135deg,#10b981,#059669);box-shadow:0 4px 15px rgba(16,185,129,.2);"
+                        onclick="runEnrollFromForm()">Save &amp; Enroll</button>
+                    <button class="btn btn-primary" id="btn-update-enroll"
+                        style="flex:1;display:none;background:linear-gradient(135deg,#f59e0b,#d97706);box-shadow:0 4px 15px rgba(245,158,11,.2);"
+                        onclick="runEnrollFromForm()">Update Enrolled Face</button>
+                    <button class="btn btn-secondary" id="btn-retake" onclick="retakePhoto()">Retake Capture</button>
+                </div>
+            </div>
+
+            <div class="progress-bar-container" id="crypto-progress-container">
+                <div class="progress-bar" id="crypto-progress-bar"></div>
+            </div>
+
+            <div class="input-group">
+                <label>Edge Secure Enclave Terminal Logs</label>
+                <div class="terminal-container" id="terminal-log">
+                    <div class="terminal-line info">Secure Enclave initialized. Ready.</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="panel">
+            <div class="panel-title"><span class="number">2</span>Cloud Matching Engine &amp; Biometric DB</div>
+
+            <div class="result-container" id="result-box">
+                <div class="result-info">
+                    <span class="result-title" id="result-title">System Idle</span>
+                    <span class="result-desc" id="result-desc">Awaiting client submission.</span>
+                </div>
+                <div class="result-status" id="result-status">-</div>
+            </div>
+
+            <div class="input-group" style="margin-top:1.5rem;margin-bottom:1.5rem;">
+                <div
+                    style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.75rem;width:100%;">
+                    <label style="margin:0;font-size:.85rem;color:var(--text-secondary);">Biometric Accuracy Diagnostics
+                        (Confusion Matrix)</label>
+                    <button class="btn btn-secondary" style="padding:.2rem .6rem;font-size:.7rem;height:auto;"
+                        onclick="resetConfusionMatrix()">Reset Stats</button>
+                </div>
+                <div class="matrix-grid">
+                    <div class="matrix-cell label"></div>
+                    <div class="matrix-cell header-label">Predicted Match (PASS)</div>
+                    <div class="matrix-cell header-label">Predicted Mismatch (FAIL)</div>
+                    <div class="matrix-cell row-label">Actual Match</div>
+                    <div class="matrix-cell val-cell tp" id="matrix-tp"><span class="count">0</span><span
+                            class="pct">True Positive (TP)</span></div>
+                    <div class="matrix-cell val-cell fn" id="matrix-fn"><span class="count">0</span><span
+                            class="pct">False Negative (FN)</span></div>
+                    <div class="matrix-cell row-label">Actual Mismatch</div>
+                    <div class="matrix-cell val-cell fp" id="matrix-fp"><span class="count">0</span><span
+                            class="pct">False Positive (FP)</span></div>
+                    <div class="matrix-cell val-cell tn" id="matrix-tn"><span class="count">0</span><span
+                            class="pct">True Negative (TN)</span></div>
+                </div>
+                <div
+                    style="margin-top:.75rem;display:flex;gap:1.5rem;font-size:.8rem;color:var(--text-secondary);padding-left:.25rem;">
+                    <div>Accuracy: <span id="metric-accuracy"
+                            style="font-weight:600;color:var(--text-primary);">-</span></div>
+                    <div>FAR: <span id="metric-far" style="font-weight:600;color:var(--danger);">-</span></div>
+                    <div>FRR: <span id="metric-frr" style="font-weight:600;color:var(--danger);">-</span></div>
+                    <div>F1 Score: <span id="metric-f1" style="font-weight:600;color:var(--accent-primary);">-</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="input-group">
+                <label>Enrolled Ciphertext Template Registry (Vercel KV)</label>
+                <div class="db-table-container">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>User ID</th>
+                                <th>Public Key n (Modulus)</th>
+                                <th>Encrypted Vector (Ciphertext)</th>
+                                <th>Encrypted Norm term</th>
+                            </tr>
+                        </thead>
+                        <tbody id="db-body">
+                            <tr>
+                                <td colspan="4" style="text-align:center;color:var(--text-secondary);padding:2rem;">No
+                                    enrolled templates in this session.</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div class="config-grid" style="grid-template-columns:1fr;">
+                <div class="server-badge" style="justify-content:center;font-size:.85rem;padding:.75rem;">
+                    <span>Active Storage backend: </span>
+                    <strong class="mono" id="db-type">InMemoryStore</strong>
+                    <span>| Enrolled count: </span>
+                    <strong class="mono" id="db-count">0</strong>
+                </div>
+            </div>
+
+            <div class="terminal-container" id="server-terminal-log" style="height:250px;">
+                <div class="terminal-line info">Cloud matching server ready. Invariant: Private key never exits client.
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <script>
+        let stream = null, selectedSource = 'webcam', currentImageBase64 = null;
+        let serverUrl = window.location.origin;
+        let public_key_n = null, private_key_p = null, private_key_q = null;
+        const SCALE = 1000000n, SCALE_SQ = 1000000000000n;
+        let matrixStats = { tp: 0, tn: 0, fp: 0, fn: 0 };
+        let webcamActualUser = "alice";
+        let countdownTimer = null, countdownTimerActive = false;
+        let isUpdateMode = false, lastEnteredUsername = "";
+        let lastCaptureFaceConfirmed = false;
+
+        const PRESETS = {
+            alice: `data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 160" width="160" height="160"><rect width="100%" height="100%" fill="%231e1e2f"/><circle cx="80" cy="75" r="35" fill="%23fbcfe8"/><path d="M40 135c0-20 20-30 40-30s40 10 40 30" fill="%23fbcfe8"/><path d="M50 70c0 0 10-15 30-15s30 15 30 15" stroke="%23db2777" stroke-width="6" fill="none"/><circle cx="70" cy="75" r="4" fill="%231e1e2f"/><circle cx="90" cy="75" r="4" fill="%231e1e2f"/><path d="M72 90q8 4 16 0" stroke="%23db2777" stroke-width="3" fill="none"/></svg>`,
+            bob: `data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 160" width="160" height="160"><rect width="100%" height="100%" fill="%231e1e2f"/><circle cx="80" cy="75" r="35" fill="%23fed7aa"/><path d="M40 135c0-20 20-30 40-30s40 10 40 30" fill="%23fed7aa"/><rect x="55" y="45" width="50" height="20" fill="%2378350f"/><circle cx="70" cy="75" r="4" fill="%231e1e2f"/><circle cx="90" cy="75" r="4" fill="%231e1e2f"/><path d="M72 88q8 3 16 0" stroke="%239a3412" stroke-width="3" fill="none"/></svg>`
+        };
+
+        const webcam = document.getElementById('webcam');
+        const photoPreview = document.getElementById('photo-preview');
+        const placeholder = document.getElementById('capture-placeholder');
+        const btnCamera = document.getElementById('btn-camera');
+        const btnSnap = document.getElementById('btn-snap');
+        const btnEnroll = document.getElementById('btn-enroll');
+        const btnVerify = document.getElementById('btn-verify');
+        const epsilonInput = document.getElementById('epsilon');
+        const epsilonVal = document.getElementById('epsilon-val');
+        const logContainer = document.getElementById('terminal-log');
+        const serverLogContainer = document.getElementById('server-terminal-log');
+
+        epsilonInput.addEventListener('input', e => epsilonVal.textContent = e.target.value);
+
+        function gid(id) { return document.getElementById(id); }
+        function setDisplay(id, val) { gid(id).style.display = val; }
+
+        function bigintModPow(base, exp, mod) {
+            let res = 1n;
+            base = BigInt(base) % BigInt(mod);
+            exp = BigInt(exp);
+            const m = BigInt(mod);
+            while (exp > 0n) {
+                if (exp % 2n === 1n) res = (res * base) % m;
+                base = (base * base) % m;
+                exp = exp / 2n;
+            }
+            return res;
+        }
+
+        function modInverse(a, m) {
+            let m0 = m, y = 0n, x = 1n;
+            if (m === 1n) return 0n;
+            while (a > 1n) {
+                const q = a / m, t = m;
+                m = a % m; a = t;
+                const t2 = y; y = x - q * y; x = t2;
+            }
+            return x < 0n ? x + m0 : x;
+        }
+
+        function makeLog(container) {
+            return (text, type = "") => {
+                const div = document.createElement('div');
+                div.className = `terminal-line ${type}`;
+                div.innerHTML = `<span class="timestamp">[${new Date().toLocaleTimeString()}]</span> ${text}`;
+                container.appendChild(div);
+                container.scrollTop = container.scrollHeight;
+            };
+        }
+        const clientLog = makeLog(logContainer);
+        const serverLog = makeLog(serverLogContainer);
+
+        function validateActionButtons() {
+            const hasKey = public_key_n !== null;
+            const hasImage = currentImageBase64 !== null || (selectedSource === 'webcam' && stream !== null);
+            btnEnroll.disabled = !(hasKey && hasImage);
+            btnVerify.disabled = !(hasKey && hasImage);
+            document.querySelectorAll('.action-form-container .btn').forEach(b => b.disabled = false);
+        }
+
+        function resetFormState() {
+            isUpdateMode = false; lastEnteredUsername = "";
+            gid('action-username').value = '';
+            gid('action-password').value = '';
+            setDisplay('group-password', 'none');
+            setDisplay('btn-proceed', 'block');
+            setDisplay('btn-save-enroll', 'none');
+            setDisplay('btn-update-enroll', 'none');
+            gid('form-helper-text').innerHTML = 'Enter your name to proceed.';
+            document.querySelectorAll('.action-form-container .btn').forEach(b => b.disabled = false);
+        }
+
+        function updateConfusionMatrixUI() {
+            ['tp', 'tn', 'fp', 'fn'].forEach(k => gid(`matrix-${k}`).querySelector('.count').textContent = matrixStats[k]);
+            const total = matrixStats.tp + matrixStats.tn + matrixStats.fp + matrixStats.fn;
+            if (total === 0) { ['metric-accuracy', 'metric-far', 'metric-frr', 'metric-f1'].forEach(id => gid(id).textContent = '-'); return; }
+            gid('metric-accuracy').textContent = (((matrixStats.tp + matrixStats.tn) / total) * 100).toFixed(1) + '%';
+            const mismatch = matrixStats.fp + matrixStats.tn;
+            gid('metric-far').textContent = mismatch > 0 ? ((matrixStats.fp / mismatch) * 100).toFixed(1) + '%' : '0.0%';
+            const match = matrixStats.tp + matrixStats.fn;
+            gid('metric-frr').textContent = match > 0 ? ((matrixStats.fn / match) * 100).toFixed(1) + '%' : '0.0%';
+            const f1Denom = 2 * matrixStats.tp + matrixStats.fp + matrixStats.fn;
+            gid('metric-f1').textContent = f1Denom > 0 ? ((2 * matrixStats.tp / f1Denom)).toFixed(3) : '0.000';
+        }
+
+        function resetConfusionMatrix() {
+            matrixStats = { tp: 0, tn: 0, fp: 0, fn: 0 };
+            updateConfusionMatrixUI();
+            clientLog("Confusion matrix statistics reset.");
+        }
+
+        function showUpdatePrompt() {
+            setDisplay('group-password', 'flex');
+            gid('label-password').textContent = "Enter PIN to change saved image";
+            gid('action-password').placeholder = "Enter security PIN";
+            gid('form-helper-text').innerHTML = `<span style="color:var(--danger)">Verification Failed.</span> To change the saved image, capture a new image and enter the PIN, then only changing is allowed.`;
+            setDisplay('btn-proceed', 'none');
+            setDisplay('btn-save-enroll', 'none');
+            setDisplay('btn-update-enroll', 'block');
+        }
+
+        let faceScanInterval = null;
+        let faceScanPulse = 0;
+        let faceDetectedFrames = 0;  // consecutive frames with face detected
+        const FACE_CONFIRM_FRAMES = 2; // capture after this many consecutive detections
+
+        async function startFaceScan() {
+            const canvas = gid('face-scan-canvas');
+            const badge = gid('face-badge');
+            const textSpan = gid('countdown-text');
+            if (!canvas || !webcam) return;
+            canvas.width = webcam.videoWidth || 400;
+            canvas.height = webcam.videoHeight || 300;
+            canvas.style.display = 'block';
+            badge.style.display = 'block';
+            faceDetectedFrames = 0;
+
+            faceScanInterval = setInterval(async () => {
+                if (!stream) { stopFaceScan(); return; }
+                const ctx = canvas.getContext('2d');
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+                faceScanPulse = (faceScanPulse + 1) % 20;
+                const pulse = 0.55 + Math.sin(faceScanPulse / 20 * Math.PI * 2) * 0.25;
+
+                if ('FaceDetector' in window) {
+                    try {
+                        const tmp = document.createElement('canvas');
+                        tmp.width = webcam.videoWidth || 400; tmp.height = webcam.videoHeight || 300;
+                        const tctx = tmp.getContext('2d');
+                        tctx.translate(tmp.width, 0); tctx.scale(-1, 1);
+                        tctx.drawImage(webcam, 0, 0, tmp.width, tmp.height);
+
+                        const faces = await new FaceDetector({ fastMode: true, maxDetectedFaces: 1 }).detect(tmp);
+                        if (faces.length > 0) {
+                            faceDetectedFrames++;
+                            const b = faces[0].boundingBox;
+                            const pad = Math.max(b.width, b.height) * 0.35;
+                            const cx = Math.max(0, b.x - pad), cy = Math.max(0, b.y - pad * 1.2);
+                            const cw = Math.min(tmp.width, b.x + b.width + pad) - cx;
+                            const ch = Math.min(tmp.height, b.y + b.height + pad) - cy;
+
+                            // Draw pulsing crop box
+                            ctx.save();
+                            ctx.strokeStyle = `rgba(16,185,129,${pulse})`;
+                            ctx.lineWidth = 2.5;
+                            ctx.shadowColor = 'rgba(16,185,129,.7)';
+                            ctx.shadowBlur = 8;
+                            ctx.strokeRect(cx, cy, cw, ch);
+                            // Corner accents
+                            const cs = 14;
+                            ctx.lineWidth = 3.5;
+                            [[cx, cy], [cx + cw, cy], [cx, cy + ch], [cx + cw, cy + ch]].forEach(([x, y], i) => {
+                                ctx.beginPath();
+                                ctx.moveTo(x + (i % 2 === 0 ? 0 : -cs), y); ctx.lineTo(x + (i % 2 === 0 ? cs : -cs), y);
+                                ctx.moveTo(x, y + (i < 2 ? 0 : -cs)); ctx.lineTo(x, y + (i < 2 ? cs : -cs));
+                                ctx.stroke();
+                            });
+                            ctx.restore();
+
+                            if (faceDetectedFrames >= FACE_CONFIRM_FRAMES) {
+                                // Face stably detected — capture immediately
+                                badge.textContent = '✓ Face detected! Capturing...';
+                                badge.style.background = 'rgba(16,185,129,.25)';
+                                badge.style.border = '1px solid rgba(16,185,129,.6)';
+                                badge.style.color = '#10b981';
+                                if (textSpan) textSpan.textContent = 'Face detected! Capturing...';
+                                stopFaceScan();
+                                await captureSnapshot();
+                            } else {
+                                badge.textContent = '✓ FACE DETECTED — Hold still...';
+                                badge.style.background = 'rgba(16,185,129,.15)';
+                                badge.style.border = '1px solid rgba(16,185,129,.4)';
+                                badge.style.color = '#10b981';
+                                if (textSpan) textSpan.textContent = 'Face detected — Hold still...';
+                            }
+                        } else {
+                            faceDetectedFrames = 0; // reset streak
+                            drawNoFaceBox(ctx, canvas, pulse);
+                            badge.textContent = '⚠ No face — align your face to the camera';
+                            badge.style.background = 'rgba(245,158,11,.12)';
+                            badge.style.border = '1px solid rgba(245,158,11,.35)';
+                            badge.style.color = '#f59e0b';
+                            if (textSpan) textSpan.textContent = 'Align your face...';
+                        }
+                    } catch (e) { drawNoFaceBox(ctx, canvas, pulse); }
+                } else {
+                    // No FaceDetector API — draw centre-crop box and auto-capture after 1 s
+                    drawNoFaceBox(ctx, canvas, pulse);
+                    badge.textContent = 'ℹ CENTRE CROP ACTIVE — capturing shortly...';
+                    badge.style.background = 'rgba(99,102,241,.12)';
+                    badge.style.border = '1px solid rgba(99,102,241,.3)';
+                    badge.style.color = 'var(--accent-primary)';
+                    if (textSpan) textSpan.textContent = 'Align your face...';
+                    faceDetectedFrames++;
+                    if (faceDetectedFrames >= 4) { // ~1.2 s settle time
+                        stopFaceScan();
+                        await captureSnapshot();
+                    }
+                }
+            }, 300);
+        }
+
+        function drawNoFaceBox(ctx, canvas, pulse) {
+            const side = Math.min(canvas.width, canvas.height) * 0.72;
+            const cx = (canvas.width - side) / 2;
+            const cy = (canvas.height - side) / 2 - canvas.height * 0.04;
+            ctx.save();
+            ctx.strokeStyle = `rgba(99,102,241,${pulse})`;
+            ctx.lineWidth = 2; ctx.setLineDash([6, 4]);
+            ctx.shadowColor = 'rgba(99,102,241,.5)'; ctx.shadowBlur = 6;
+            ctx.strokeRect(cx, cy, side, side);
+            ctx.restore();
+        }
+
+        function stopFaceScan() {
+            clearInterval(faceScanInterval); faceScanInterval = null;
+            faceDetectedFrames = 0;
+            const canvas = gid('face-scan-canvas'), badge = gid('face-badge');
+            if (canvas) { canvas.getContext('2d').clearRect(0, 0, canvas.width, canvas.height); canvas.style.display = 'none'; }
+            if (badge) badge.style.display = 'none';
+        }
+
+        function startFaceWatch() {
+            if (faceScanInterval) return; // already watching
+            const overlay = gid('countdown-overlay'), textSpan = gid('countdown-text');
+            overlay.style.display = 'flex';
+            if (textSpan) textSpan.textContent = 'Align your face...';
+            startFaceScan();
+        }
+
+        function updateCaptureUI() {
+            const formContainer = gid('action-form-container');
+            if (selectedSource === 'webcam') {
+                if (currentImageBase64) {
+                    webcam.style.display = 'none'; photoPreview.style.display = 'block';
+                    placeholder.style.display = 'none'; formContainer.style.display = 'flex';
+                    if (isUpdateMode) {
+                        gid('action-username').value = lastEnteredUsername;
+                        setDisplay('group-password', 'flex');
+                        gid('label-password').textContent = "Enter PIN to change saved image";
+                        gid('action-password').placeholder = "Enter security PIN";
+                        gid('form-helper-text').innerHTML = `<span style="color:var(--danger)">Change saved image.</span> Enter your PIN and click "Update Enrolled Face" to overwrite.`;
+                        setDisplay('btn-proceed', 'none'); setDisplay('btn-save-enroll', 'none'); setDisplay('btn-update-enroll', 'block');
+                    }
+                } else if (stream) {
+                    webcam.style.display = 'block'; photoPreview.style.display = 'none';
+                    placeholder.style.display = 'none'; formContainer.style.display = 'none';
+                } else {
+                    webcam.style.display = 'none'; photoPreview.style.display = 'none';
+                    placeholder.style.display = 'flex'; formContainer.style.display = 'none';
+                }
+            } else {
                 webcam.style.display = 'none'; photoPreview.style.display = 'block';
                 placeholder.style.display = 'none'; formContainer.style.display = 'flex';
-                if (isUpdateMode) {
-                    gid('action-username').value = lastEnteredUsername;
-                    setDisplay('group-password', 'flex');
-                    gid('label-password').textContent = "Enter PIN to change saved image";
-                    gid('action-password').placeholder = "Enter security PIN";
-                    gid('form-helper-text').innerHTML = `<span style="color:var(--danger)">Change saved image.</span> Enter your PIN and click "Update Enrolled Face" to overwrite.`;
-                    setDisplay('btn-proceed', 'none'); setDisplay('btn-save-enroll', 'none'); setDisplay('btn-update-enroll', 'block');
-                }
-            } else if (stream) {
-                webcam.style.display = 'block'; photoPreview.style.display = 'none';
-                placeholder.style.display = 'none'; formContainer.style.display = 'none';
-            } else {
-                webcam.style.display = 'none'; photoPreview.style.display = 'none';
-                placeholder.style.display = 'flex'; formContainer.style.display = 'none';
             }
-        } else {
-            webcam.style.display = 'none'; photoPreview.style.display = 'block';
-            placeholder.style.display = 'none'; formContainer.style.display = 'flex';
         }
-    }
 
-    function selectSource(source, evt) {
-        document.querySelectorAll('.avatar-option').forEach(el => el.classList.remove('selected'));
-        (evt || window.event).currentTarget.classList.add('selected');
-        selectedSource = source;
-        resetFormState();
-        if (source === 'webcam') {
-            currentImageBase64 = null;
-            if (!stream) { toggleCamera(); } else { startFaceWatch(); updateCaptureUI(); }
-            btnCamera.style.display = 'inline-flex'; btnSnap.style.display = 'inline-flex';
-            validateActionButtons();
-        } else {
-            stopCamera();
-            photoPreview.src = PRESETS[source];
-            btnCamera.style.display = 'none'; btnSnap.style.display = 'none';
-            currentImageBase64 = PRESETS[source];
-            clientLog(`Selected preset face: ${source.toUpperCase()}`);
-            gid('action-username').value = source;
-            lastEnteredUsername = source;
-            validateActionButtons(); updateCaptureUI();
-        }
-    }
-
-    async function handleProceedName() {
-        const usernameInput = gid('action-username');
-        const userId = usernameInput.value.trim();
-        if (!userId) { alert("Please enter a username to proceed."); usernameInput.focus(); return; }
-        lastEnteredUsername = userId;
-        clientLog(`Checking if identity '${userId}' exists in secure database...`);
-        try {
-            const data = await fetch(`${serverUrl}/api/client/exists/${userId}`).then(r => r.json());
-            if (data.exists) {
-                clientLog(`Identity '${userId}' found. Running face verification...`);
-                gid('user-id').value = userId;
-                await runVerify();
+        function selectSource(source, evt) {
+            document.querySelectorAll('.avatar-option').forEach(el => el.classList.remove('selected'));
+            (evt || window.event).currentTarget.classList.add('selected');
+            selectedSource = source;
+            resetFormState();
+            if (source === 'webcam') {
+                currentImageBase64 = null;
+                if (!stream) { toggleCamera(); } else { startFaceWatch(); updateCaptureUI(); }
+                btnCamera.style.display = 'inline-flex'; btnSnap.style.display = 'inline-flex';
+                validateActionButtons();
             } else {
-                clientLog(`Identity '${userId}' not found. Enter PIN to enroll.`);
-                setDisplay('group-password', 'flex');
-                gid('label-password').textContent = "Create Security PIN";
-                gid('action-password').placeholder = "Choose a PIN";
-                gid('form-helper-text').innerHTML = `<span style="color:var(--accent-primary)">New Identity.</span> Set a PIN to enroll your biometric template.`;
-                setDisplay('btn-proceed', 'none'); setDisplay('btn-save-enroll', 'block');
+                stopCamera();
+                photoPreview.src = PRESETS[source];
+                btnCamera.style.display = 'none'; btnSnap.style.display = 'none';
+                currentImageBase64 = PRESETS[source];
+                lastCaptureFaceConfirmed = true;
+                clientLog(`Selected preset face: ${source.toUpperCase()}`);
+                gid('action-username').value = source;
+                lastEnteredUsername = source;
+                validateActionButtons(); updateCaptureUI();
             }
-        } catch (err) { clientLog(`Error querying server: ${err.message}`, "danger"); }
-    }
-
-    async function runEnrollFromForm() {
-        const usernameInput = gid('action-username'), passwordInput = gid('action-password');
-        const userId = usernameInput.value.trim(), password = passwordInput.value;
-        if (!userId) { alert("Please enter a username."); usernameInput.focus(); return; }
-        if (!password) { alert("Please enter a security PIN."); passwordInput.focus(); return; }
-        gid('user-id').value = userId; gid('user-pw').value = password;
-        await runEnroll();
-    }
-
-    function retakePhoto() {
-        currentImageBase64 = null;
-        if (!isUpdateMode) { resetFormState(); } else { gid('action-password').value = ''; }
-        setDisplay('action-form-container', 'none');
-        toggleCamera();
-    }
-
-    async function toggleCamera() {
-        if (stream) { stopCamera(); return; }
-        if (!window.isSecureContext || !navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-            const isFile = window.location.protocol === "file:";
-            const reason = isFile
-                ? `You're opening this file directly (${window.location.href}). Browsers block camera access for file:// pages.`
-                : `This page is served over an insecure context (${window.location.protocol}//${window.location.host}). Camera requires HTTPS or localhost.`;
-            const fix = isFile
-                ? "Fix: run `python -m http.server 8080` and open http://localhost:8080/"
-                : "Fix: access via https:// or http://localhost.";
-            clientLog(`Camera unavailable: ${reason} ${fix}`, "danger");
-            alert(`Camera unavailable.\n\n${reason}\n\n${fix}\n\nYou can still use a preset face avatar instead.`);
-            return;
         }
-        try {
-            stream = await navigator.mediaDevices.getUserMedia({ video: { width:400, height:300 } });
-            webcam.srcObject = stream; btnCamera.textContent = 'Stop Camera'; btnSnap.disabled = false;
-            clientLog("Webcam stream started.");
-            startFaceWatch();
-            updateCaptureUI();
-        } catch (err) {
-            clientLog(`Webcam access denied: ${err.name} - ${err.message}`, "danger");
-            alert(`Unable to access webcam (${err.name}). Allow camera access or select a preset face avatar.`);
-        }
-    }
 
-    function stopCamera() {
-        if (!stream) return;
-        stopFaceScan();
-        const overlay = gid('countdown-overlay');
-        if (overlay) overlay.style.display = 'none';
-        stream.getTracks().forEach(t => t.stop());
-        stream = null; webcam.srcObject = null;
-        btnCamera.textContent = 'Start Camera'; btnSnap.disabled = true;
-        clientLog("Webcam stream stopped.");
-        updateCaptureUI();
-    }
-
-    async function captureSnapshot() {
-        // Draw full mirrored frame to a temp canvas first
-        const full = document.createElement('canvas');
-        full.width = webcam.videoWidth || 400; full.height = webcam.videoHeight || 300;
-        const fctx = full.getContext('2d');
-        fctx.translate(full.width, 0); fctx.scale(-1, 1);
-        fctx.drawImage(webcam, 0, 0, full.width, full.height);
-
-        let cropBox = null;
-
-        // Try browser FaceDetector API (Chrome 70+, Edge 79+)
-        if ('FaceDetector' in window) {
+        async function handleProceedName() {
+            const usernameInput = gid('action-username');
+            const userId = usernameInput.value.trim();
+            if (!userId) { alert("Please enter a username to proceed."); usernameInput.focus(); return; }
+            lastEnteredUsername = userId;
+            clientLog(`Checking if identity '${userId}' exists in secure database...`);
             try {
-                const detector = new FaceDetector({ fastMode: true, maxDetectedFaces: 1 });
-                const faces = await detector.detect(full);
-                if (faces.length > 0) {
-                    const b = faces[0].boundingBox;
-                    const pad = Math.max(b.width, b.height) * 0.35; // 35% padding
-                    cropBox = {
-                        x: Math.max(0, b.x - pad),
-                        y: Math.max(0, b.y - pad * 1.2), // extra top for forehead
-                        w: Math.min(full.width,  b.x + b.width  + pad)   - Math.max(0, b.x - pad),
-                        h: Math.min(full.height, b.y + b.height + pad)   - Math.max(0, b.y - pad * 1.2)
-                    };
-                    clientLog(`Face detected at (${Math.round(b.x)},${Math.round(b.y)}) — cropping to face region.`, "info");
+                const data = await fetch(`${serverUrl}/api/client/exists/${userId}`).then(r => r.json());
+                if (data.exists) {
+                    clientLog(`Identity '${userId}' found. Running face verification...`);
+                    gid('user-id').value = userId;
+                    await runVerify();
+                } else {
+                    clientLog(`Identity '${userId}' not found. Enter PIN to enroll.`);
+                    setDisplay('group-password', 'flex');
+                    gid('label-password').textContent = "Create Security PIN";
+                    gid('action-password').placeholder = "Choose a PIN";
+                    gid('form-helper-text').innerHTML = `<span style="color:var(--accent-primary)">New Identity.</span> Set a PIN to enroll your biometric template.`;
+                    setDisplay('btn-proceed', 'none'); setDisplay('btn-save-enroll', 'block');
                 }
-            } catch (e) { /* FaceDetector failed, fall through */ }
+            } catch (err) { clientLog(`Error querying server: ${err.message}`, "danger"); }
         }
 
-        // Fallback: centre-square crop (covers most face-forward webcam poses)
-        if (!cropBox) {
-            const side = Math.min(full.width, full.height) * 0.72;
-            cropBox = {
-                x: (full.width  - side) / 2,
-                y: (full.height - side) / 2 - full.height * 0.04, // shift up slightly for forehead
-                w: side, h: side
-            };
-            if (!('FaceDetector' in window)) {
-                clientLog("FaceDetector API not available — using centre-crop fallback.", "info");
-            } else {
-                clientLog("No face detected — using centre-crop fallback.", "info");
-            }
+        async function runEnrollFromForm() {
+            const usernameInput = gid('action-username'), passwordInput = gid('action-password');
+            const userId = usernameInput.value.trim(), password = passwordInput.value;
+            if (!userId) { alert("Please enter a username."); usernameInput.focus(); return; }
+            if (!password) { alert("Please enter a security PIN."); passwordInput.focus(); return; }
+            gid('user-id').value = userId; gid('user-pw').value = password;
+            await runEnroll();
         }
 
-        // Render cropped face to a square output canvas (160×160 for FaceNet)
-        const out = document.createElement('canvas');
-        out.width = 160; out.height = 160;
-        const octx = out.getContext('2d');
-        octx.drawImage(full, cropBox.x, cropBox.y, cropBox.w, cropBox.h, 0, 0, 160, 160);
-
-        currentImageBase64 = out.toDataURL('image/jpeg', 0.95);
-        photoPreview.src = currentImageBase64;
-        stopCamera();
-        clientLog("Face-only snapshot captured and cropped successfully.", "success");
-        validateActionButtons(); updateCaptureUI();
-    }
-
-
-    async function checkServerHealth() {
-        try {
-            const data = await fetch(`${serverUrl}/health`).then(r => r.json());
-            const dot = gid('server-status-dot');
-            dot.style.backgroundColor = 'var(--success)'; dot.style.boxShadow = '0 0 10px var(--success)';
-            gid('server-status-text').textContent = 'Server Connected';
-            gid('db-type').textContent = data.store_type; gid('db-count').textContent = data.enrolled_users;
-            clientLog(`Backend check: status ok. Database backend = ${data.store_type}.`);
-            refreshDatabaseView();
-        } catch (err) {
-            const dot = gid('server-status-dot');
-            dot.style.backgroundColor = 'var(--danger)'; dot.style.boxShadow = '0 0 10px var(--danger)';
-            gid('server-status-text').textContent = 'Disconnected';
-            clientLog("Failed to connect to backend server. Make sure FastAPI server is running.", "danger");
+        function retakePhoto() {
+            currentImageBase64 = null;
+            lastCaptureFaceConfirmed = false;
+            if (!isUpdateMode) { resetFormState(); } else { gid('action-password').value = ''; }
+            setDisplay('action-form-container', 'none');
+            toggleCamera();
         }
-    }
 
-    async function fetchKeyPair() {
-        const size = gid('key-size').value;
-        clientLog(`Requesting Paillier key generation on edge enclave (${size}-bit)...`);
-        try {
-            const data = await fetch(`${serverUrl}/api/crypto/keygen?key_length=${size}`).then(r => r.json());
-            public_key_n = BigInt(data.public_key_n);
-            private_key_p = BigInt(data.private_key_p);
-            private_key_q = BigInt(data.private_key_q);
-            clientLog(`Key pair generated!`, "success");
-            clientLog(`Public Key modulus: ${public_key_n.toString().length} decimal digits.`);
-            clientLog(`Private Key p=${private_key_p.toString().substring(0,15)}..., q=${private_key_q.toString().substring(0,15)}... (loaded into device RAM).`);
-            validateActionButtons();
-        } catch (err) { clientLog("Failed to generate keys from server.", "danger"); }
-    }
-
-    async function refreshDatabaseView() {
-        try {
-            const data = await fetch(`${serverUrl}/health`).then(r => r.json());
-            gid('db-count').textContent = data.enrolled_users;
-            const tbody = gid('db-body');
-            if (data.enrolled_users === 0) {
-                tbody.innerHTML = `<tr><td colspan="4" style="text-align:center;color:var(--text-secondary);padding:2rem;">No enrolled templates in this session.</td></tr>`;
+        async function toggleCamera() {
+            if (stream) { stopCamera(); return; }
+            if (!window.isSecureContext || !navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+                const isFile = window.location.protocol === "file:";
+                const reason = isFile
+                    ? `You're opening this file directly (${window.location.href}). Browsers block camera access for file:// pages.`
+                    : `This page is served over an insecure context (${window.location.protocol}//${window.location.host}). Camera requires HTTPS or localhost.`;
+                const fix = isFile
+                    ? "Fix: run `python -m http.server 8080` and open http://localhost:8080/"
+                    : "Fix: access via https:// or http://localhost.";
+                clientLog(`Camera unavailable: ${reason} ${fix}`, "danger");
+                alert(`Camera unavailable.\n\n${reason}\n\n${fix}\n\nYou can still use a preset face avatar instead.`);
                 return;
             }
-            const currentUser = gid('user-id').value;
-            const row = u => `<tr><td style="font-weight:600">${u}</td><td class="mono truncate">${public_key_n ? public_key_n.toString() : 'Attached'}</td><td class="mono">[Encrypted Vector: 512 dimensions]</td><td class="mono truncate">${public_key_n ? 'Enc(||x||^2)' : 'Stored'}</td></tr>`;
-            const matched = ['alice','bob','admin','user1'].find(u => u === currentUser);
-            tbody.innerHTML = matched ? row(matched) : row('alice (Enrolled)');
-        } catch (e) { /* Ignore */ }
-    }
-
-    function getDeterministicEmbedding(seedStr) {
-        let seed = 0;
-        for (let i = 0; i < seedStr.length; i++) seed = (seed * 31 + seedStr.charCodeAt(i)) & 0xffffffff;
-        const emb = []; let sumSq = 0;
-        for (let i = 0; i < 512; i++) {
-            seed = (1103515245 * seed + 12345) & 0x7fffffff;
-            const val = (seed / 0x7fffffff) - 0.5;
-            emb.push(val); sumSq += val * val;
-        }
-        const norm = Math.sqrt(sumSq);
-        return emb.map(x => x / norm);
-    }
-
-    async function getEmbedding(base64Image) {
-        if (selectedSource === 'alice' || selectedSource === 'bob') {
-            clientLog(`Biometric sensor: extracting pre-calculated embedding for preset '${selectedSource}'...`);
-            return getDeterministicEmbedding(selectedSource);
-        }
-        clientLog("Sending face image to secure hardware sensor for 512-d FaceNet embedding extraction...");
-        const res = await fetch(`${serverUrl}/api/embed`, {
-            method: 'POST', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ image_base64: base64Image })
-        });
-        if (!res.ok) { const e = await res.json(); throw new Error(e.detail || "Face embedding failed."); }
-        const data = await res.json();
-        clientLog("Embedding successfully extracted! 512 float values, normalized to unit length.", "success");
-        return data.embedding;
-    }
-
-    function applyPerturbation(embedding, epsilon) {
-        if (epsilon <= 0.0) { clientLog("Perturbation bypassed (&epsilon; = 0). Embedding remains raw."); return embedding; }
-        clientLog(`Applying Calibrated Noise Perturbation (&epsilon; = ${epsilon})...`);
-        const noise = new Float64Array(embedding.length);
-        for (let i = 0; i < embedding.length; i += 2) {
-            const u1 = Math.random() || 0.0001, u2 = Math.random() || 0.0001;
-            const mag = Math.sqrt(-2.0 * Math.log(u1));
-            noise[i] = mag * Math.cos(2.0 * Math.PI * u2);
-            if (i + 1 < embedding.length) noise[i + 1] = mag * Math.sin(2.0 * Math.PI * u2);
-        }
-        let sumSq = 0;
-        for (let i = 0; i < noise.length; i++) sumSq += noise[i] * noise[i];
-        const norm = Math.sqrt(sumSq);
-        for (let i = 0; i < noise.length; i++) noise[i] = (noise[i] / norm) * epsilon;
-        const result = []; let finalSumSq = 0;
-        const perturbed = new Float64Array(embedding.length);
-        for (let i = 0; i < embedding.length; i++) { perturbed[i] = embedding[i] + noise[i]; finalSumSq += perturbed[i] * perturbed[i]; }
-        const finalNorm = Math.sqrt(finalSumSq);
-        for (let i = 0; i < embedding.length; i++) result.push(perturbed[i] / finalNorm);
-        clientLog("Adversarial perturbation complete. Relocated embedding coordinates.");
-        return result;
-    }
-
-    async function encryptEmbedding(perturbedEmb) {
-        clientLog("Starting Client-side Paillier Encryption of embedding vector...");
-        const progressContainer = gid('crypto-progress-container');
-        const progressBar = gid('crypto-progress-bar');
-        progressContainer.style.display = 'block';
-        const n = public_key_n, n_sq = n * n;
-        clientLog(`Scaling values by SCALE = 10^6 and rounding to BigInt...`);
-        const q = perturbedEmb.map(x => BigInt(Math.round(x * Number(SCALE))));
-        let norm_sq = 0n;
-        for (const qi of q) norm_sq += qi * qi;
-        clientLog("Encrypting precomputed norm term ||a||^2...");
-        const r_norm = BigInt(Math.floor(Math.random() * (Number(n) - 1))) + 1n;
-        const enc_norm_sq = (((norm_sq * n) + 1n) * bigintModPow(r_norm, n, n_sq)) % n_sq;
-        const enc_vector = [];
-        const batchSize = 32, t0 = performance.now();
-        for (let i = 0; i < q.length; i++) {
-            const r = BigInt(Math.floor(Math.random() * (Number(n) - 1))) + 1n;
-            const ct = (((q[i] * n) + 1n) * bigintModPow(r, n, n_sq)) % n_sq;
-            enc_vector.push(ct.toString());
-            if (i % batchSize === 0) {
-                progressBar.style.width = `${Math.round((i / q.length) * 100)}%`;
-                await new Promise(r => setTimeout(r, 0));
+            try {
+                stream = await navigator.mediaDevices.getUserMedia({ video: { width: 400, height: 300 } });
+                webcam.srcObject = stream; btnCamera.textContent = 'Stop Camera'; btnSnap.disabled = false;
+                clientLog("Webcam stream started.");
+                startFaceWatch();
+                updateCaptureUI();
+            } catch (err) {
+                clientLog(`Webcam access denied: ${err.name} - ${err.message}`, "danger");
+                alert(`Unable to access webcam (${err.name}). Allow camera access or select a preset face avatar.`);
             }
         }
-        const t1 = performance.now();
-        progressBar.style.width = '100%';
-        setTimeout(() => progressContainer.style.display = 'none', 500);
-        clientLog(`Completed encryption of 512 values in ${((t1 - t0) / 1000).toFixed(2)}s!`, "success");
-        return { enc_vector, enc_norm_sq: enc_norm_sq.toString() };
-    }
 
-    function decryptDistance(encDistanceSqStr) {
-        clientLog("Decrypting distance ciphertext returned by cloud matching engine...");
-        const c = BigInt(encDistanceSqStr);
-        const n = public_key_n, n_sq = n * n;
-        const lambda = (private_key_p - 1n) * (private_key_q - 1n);
-        const mu = modInverse(lambda, n);
-        const u = bigintModPow(c, lambda, n_sq);
-        let m = ((u - 1n) / n * mu) % n;
-        if (m > n / 2n) m = m - n;
-        const distanceSq = Number(m) / Number(SCALE_SQ);
-        clientLog(`Dequantization: d² = ${distanceSq.toFixed(6)}`, "success");
-        return distanceSq;
-    }
+        function stopCamera() {
+            if (!stream) return;
+            stopFaceScan();
+            const overlay = gid('countdown-overlay');
+            if (overlay) overlay.style.display = 'none';
+            stream.getTracks().forEach(t => t.stop());
+            stream = null; webcam.srcObject = null;
+            btnCamera.textContent = 'Start Camera'; btnSnap.disabled = true;
+            clientLog("Webcam stream stopped.");
+            updateCaptureUI();
+        }
 
-    async function runEnroll() {
-        const userId = gid('user-id').value.trim();
-        if (!userId) { alert("Please enter a username."); return; }
-        const password = gid('user-pw').value;
-        if (!password) { alert("Please enter a password to secure/update your biometric template."); return; }
-        document.querySelectorAll('.btn').forEach(b => b.disabled = true);
-        try {
-            if (!currentImageBase64 && selectedSource === 'webcam' && stream) captureSnapshot();
-            const rawEmb = await getEmbedding(currentImageBase64);
-            const enrolled = await encryptEmbedding(applyPerturbation(rawEmb, parseFloat(epsilonInput.value)));
-            clientLog(`Transmitting 512 ciphertexts to cloud matching server's /enroll endpoint...`);
-            serverLog(`[Request] Incoming POST /api/client/enroll for user ID: '${userId}'`);
-            const res = await fetch(`${serverUrl}/api/client/enroll`, {
+        async function captureSnapshot() {
+            // Draw full mirrored frame to a temp canvas first
+            const full = document.createElement('canvas');
+            full.width = webcam.videoWidth || 400; full.height = webcam.videoHeight || 300;
+            const fctx = full.getContext('2d');
+            fctx.translate(full.width, 0); fctx.scale(-1, 1);
+            fctx.drawImage(webcam, 0, 0, full.width, full.height);
+
+            let cropBox = null;
+            let faceConfirmed = false;
+
+            // Try browser FaceDetector API (Chrome 70+, Edge 79+)
+            if ('FaceDetector' in window) {
+                try {
+                    const detector = new FaceDetector({ fastMode: true, maxDetectedFaces: 1 });
+                    const faces = await detector.detect(full);
+                    if (faces.length > 0) {
+                        const b = faces[0].boundingBox;
+                        const pad = Math.max(b.width, b.height) * 0.35; // 35% padding
+                        cropBox = {
+                            x: Math.max(0, b.x - pad),
+                            y: Math.max(0, b.y - pad * 1.2), // extra top for forehead
+                            w: Math.min(full.width, b.x + b.width + pad) - Math.max(0, b.x - pad),
+                            h: Math.min(full.height, b.y + b.height + pad) - Math.max(0, b.y - pad * 1.2)
+                        };
+                        faceConfirmed = true;
+                        clientLog(`Face detected at (${Math.round(b.x)},${Math.round(b.y)}) — cropping to face region.`, "info");
+                    }
+                } catch (e) { /* FaceDetector failed, fall through */ }
+            }
+
+            // Fallback: centre-square crop (covers most face-forward webcam poses).
+            // NOTE: this path does NOT confirm a real face is present -- it's a
+            // best-effort guess. lastCaptureFaceConfirmed stays false here on
+            // purpose, so runEnroll()/runVerify() know this capture is
+            // unconfirmed and can warn the user instead of silently proceeding
+            // as if a face had actually been verified.
+            if (!cropBox) {
+                const side = Math.min(full.width, full.height) * 0.72;
+                cropBox = {
+                    x: (full.width - side) / 2,
+                    y: (full.height - side) / 2 - full.height * 0.04, // shift up slightly for forehead
+                    w: side, h: side
+                };
+                if (!('FaceDetector' in window)) {
+                    clientLog("FaceDetector API not available — using centre-crop fallback (face not confirmed).", "info");
+                } else {
+                    clientLog("No face detected — using centre-crop fallback (face not confirmed).", "info");
+                }
+            }
+
+            // Render cropped face to a square output canvas (160×160 for FaceNet)
+            const out = document.createElement('canvas');
+            out.width = 160; out.height = 160;
+            const octx = out.getContext('2d');
+            octx.drawImage(full, cropBox.x, cropBox.y, cropBox.w, cropBox.h, 0, 0, 160, 160);
+
+            currentImageBase64 = out.toDataURL('image/jpeg', 0.95);
+            lastCaptureFaceConfirmed = faceConfirmed;
+            photoPreview.src = currentImageBase64;
+            stopCamera();
+            if (faceConfirmed) {
+                clientLog("Face-only snapshot captured and cropped successfully. Face confirmed.", "success");
+            } else {
+                clientLog("Snapshot captured, but no face was positively confirmed by the detector.", "danger");
+            }
+            validateActionButtons(); updateCaptureUI();
+        }
+
+
+        async function checkServerHealth() {
+            try {
+                const data = await fetch(`${serverUrl}/health`).then(r => r.json());
+                const dot = gid('server-status-dot');
+                dot.style.backgroundColor = 'var(--success)'; dot.style.boxShadow = '0 0 10px var(--success)';
+                gid('server-status-text').textContent = 'Server Connected';
+                gid('db-type').textContent = data.store_type; gid('db-count').textContent = data.enrolled_users;
+                clientLog(`Backend check: status ok. Database backend = ${data.store_type}.`);
+                refreshDatabaseView();
+            } catch (err) {
+                const dot = gid('server-status-dot');
+                dot.style.backgroundColor = 'var(--danger)'; dot.style.boxShadow = '0 0 10px var(--danger)';
+                gid('server-status-text').textContent = 'Disconnected';
+                clientLog("Failed to connect to backend server. Make sure FastAPI server is running.", "danger");
+            }
+        }
+
+        async function fetchKeyPair() {
+            const size = gid('key-size').value;
+            clientLog(`Requesting Paillier key generation on edge enclave (${size}-bit)...`);
+            try {
+                const data = await fetch(`${serverUrl}/api/crypto/keygen?key_length=${size}`).then(r => r.json());
+                public_key_n = BigInt(data.public_key_n);
+                private_key_p = BigInt(data.private_key_p);
+                private_key_q = BigInt(data.private_key_q);
+                clientLog(`Key pair generated!`, "success");
+                clientLog(`Public Key modulus: ${public_key_n.toString().length} decimal digits.`);
+                clientLog(`Private Key p=${private_key_p.toString().substring(0, 15)}..., q=${private_key_q.toString().substring(0, 15)}... (loaded into device RAM).`);
+                validateActionButtons();
+            } catch (err) { clientLog("Failed to generate keys from server.", "danger"); }
+        }
+
+        async function refreshDatabaseView() {
+            try {
+                const data = await fetch(`${serverUrl}/health`).then(r => r.json());
+                gid('db-count').textContent = data.enrolled_users;
+                const tbody = gid('db-body');
+                if (data.enrolled_users === 0) {
+                    tbody.innerHTML = `<tr><td colspan="4" style="text-align:center;color:var(--text-secondary);padding:2rem;">No enrolled templates in this session.</td></tr>`;
+                    return;
+                }
+                const currentUser = gid('user-id').value;
+                const row = u => `<tr><td style="font-weight:600">${u}</td><td class="mono truncate">${public_key_n ? public_key_n.toString() : 'Attached'}</td><td class="mono">[Encrypted Vector: 512 dimensions]</td><td class="mono truncate">${public_key_n ? 'Enc(||x||^2)' : 'Stored'}</td></tr>`;
+                const matched = ['alice', 'bob', 'admin', 'user1'].find(u => u === currentUser);
+                tbody.innerHTML = matched ? row(matched) : row('alice (Enrolled)');
+            } catch (e) { /* Ignore */ }
+        }
+
+        function getDeterministicEmbedding(seedStr) {
+            let seed = 0;
+            for (let i = 0; i < seedStr.length; i++) seed = (seed * 31 + seedStr.charCodeAt(i)) & 0xffffffff;
+            const emb = []; let sumSq = 0;
+            for (let i = 0; i < 512; i++) {
+                seed = (1103515245 * seed + 12345) & 0x7fffffff;
+                const val = (seed / 0x7fffffff) - 0.5;
+                emb.push(val); sumSq += val * val;
+            }
+            const norm = Math.sqrt(sumSq);
+            return emb.map(x => x / norm);
+        }
+
+        async function getEmbedding(base64Image) {
+            if (selectedSource === 'alice' || selectedSource === 'bob') {
+                clientLog(`Biometric sensor: extracting pre-calculated embedding for preset '${selectedSource}'...`);
+                return getDeterministicEmbedding(selectedSource);
+            }
+            clientLog("Sending face image to secure hardware sensor for 512-d FaceNet embedding extraction...");
+            const res = await fetch(`${serverUrl}/api/embed`, {
                 method: 'POST', headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ user_id:userId, public_key_n:public_key_n.toString(), enc_vector:enrolled.enc_vector, enc_norm_sq:enrolled.enc_norm_sq, password })
+                body: JSON.stringify({ image_base64: base64Image })
             });
-            if (!res.ok) { const e = await res.json(); throw new Error(e.detail || "Enrollment failed on server."); }
-            clientLog("Cloud database successfully enrolled new user template!", "success");
-            serverLog(`[Success] Template stored under key 'template:${userId}'. Count = ${parseInt(gid('db-count').textContent) + 1}`, "success");
-            gid('result-box').className = 'result-container';
-            gid('result-title').textContent = "Template Enrolled";
-            gid('result-desc').textContent = `User '${userId}' registered successfully.`;
-            gid('result-status').textContent = "OK";
-            refreshDatabaseView();
-            if (selectedSource === 'webcam') webcamActualUser = userId;
-            resetFormState();
-        } catch (err) {
-            clientLog(`Enrollment failed: ${err.message}`, "danger");
-            serverLog(`[Error] Enrollment failed: ${err.message}`, "danger");
-        } finally { validateActionButtons(); }
-    }
-
-    async function runVerify() {
-        const userId = gid('user-id').value.trim();
-        if (!userId) { alert("Please enter a username."); return; }
-        document.querySelectorAll('.btn').forEach(b => b.disabled = true);
-        try {
-            if (!currentImageBase64 && selectedSource === 'webcam' && stream) captureSnapshot();
-            const rawEmb = await getEmbedding(currentImageBase64);
-            const perturbedEmb = applyPerturbation(rawEmb, parseFloat(epsilonInput.value));
-            clientLog("Transmitting query vector to cloud verify endpoint...");
-            serverLog(`[Request] Incoming POST /verify for user ID: '${userId}'`);
-            const res = await fetch(`${serverUrl}/verify`, {
-                method: 'POST', headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ user_id:userId, query_plain:perturbedEmb })
-            });
-            if (!res.ok) { const e = await res.json(); throw new Error(e.detail || "Verification failed on server."); }
+            if (!res.ok) { const e = await res.json(); throw new Error(e.detail || "Face embedding failed."); }
             const data = await res.json();
-            serverLog(`[Compute] Loaded ciphertexts for '${userId}'. Computed homomorphic distance.`, "info");
-            serverLog(`[Response] Returning serialized distance ciphertext...`);
-            clientLog("Received ciphertext payload. Unpacking...");
-            const unpackData = await fetch(`${serverUrl}/api/client/unpack_distance`, {
-                method: 'POST', headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ enc_distance_sq: data.enc_distance_sq })
-            }).then(r => r.json());
-            const distanceSq = decryptDistance(unpackData.ciphertext);
-            const threshold = 0.6, isMatch = distanceSq <= threshold;
-            clientLog(`Threshold: ${distanceSq.toFixed(4)} <= ${threshold} -> ${isMatch ? 'GRANTED' : 'DENIED'}`, isMatch ? "success" : "danger");
+            clientLog("Embedding successfully extracted! 512 float values, normalized to unit length.", "success");
+            return data.embedding;
+        }
 
-            // Confusion Matrix
-            const actualId = selectedSource === 'webcam' ? webcamActualUser : selectedSource;
-            const isGTMatch = actualId === userId;
-            if (isGTMatch) {
-                if (isMatch) { matrixStats.tp++; clientLog("Matrix: True Positive (TP).", "info"); }
-                else { matrixStats.fn++; clientLog("Matrix: False Negative (FN).", "warning"); }
-            } else {
-                if (isMatch) { matrixStats.fp++; clientLog("Matrix: False Positive (FP).", "danger"); }
-                else { matrixStats.tn++; clientLog("Matrix: True Negative (TN).", "info"); }
+        function applyPerturbation(embedding, epsilon) {
+            if (epsilon <= 0.0) { clientLog("Perturbation bypassed (&epsilon; = 0). Embedding remains raw."); return embedding; }
+            clientLog(`Applying Calibrated Noise Perturbation (&epsilon; = ${epsilon})...`);
+            const noise = new Float64Array(embedding.length);
+            for (let i = 0; i < embedding.length; i += 2) {
+                const u1 = Math.random() || 0.0001, u2 = Math.random() || 0.0001;
+                const mag = Math.sqrt(-2.0 * Math.log(u1));
+                noise[i] = mag * Math.cos(2.0 * Math.PI * u2);
+                if (i + 1 < embedding.length) noise[i + 1] = mag * Math.sin(2.0 * Math.PI * u2);
             }
-            updateConfusionMatrixUI();
+            let sumSq = 0;
+            for (let i = 0; i < noise.length; i++) sumSq += noise[i] * noise[i];
+            const norm = Math.sqrt(sumSq);
+            for (let i = 0; i < noise.length; i++) noise[i] = (noise[i] / norm) * epsilon;
+            const result = []; let finalSumSq = 0;
+            const perturbed = new Float64Array(embedding.length);
+            for (let i = 0; i < embedding.length; i++) { perturbed[i] = embedding[i] + noise[i]; finalSumSq += perturbed[i] * perturbed[i]; }
+            const finalNorm = Math.sqrt(finalSumSq);
+            for (let i = 0; i < embedding.length; i++) result.push(perturbed[i] / finalNorm);
+            clientLog("Adversarial perturbation complete. Relocated embedding coordinates.");
+            return result;
+        }
 
-            const resultBox = gid('result-box');
-            if (isMatch) {
-                resultBox.className = 'result-container granted';
-                gid('result-title').textContent = "Access Granted";
-                gid('result-desc').textContent = `Identity verified for user '${userId}' (d² = ${distanceSq.toFixed(4)}).`;
-                gid('result-status').textContent = "PASS";
-            } else {
-                resultBox.className = 'result-container denied';
-                gid('result-title').textContent = "Access Denied";
-                gid('result-desc').textContent = `Biometric mismatch for user '${userId}' (d² = ${distanceSq.toFixed(4)}).`;
-                gid('result-status').textContent = "FAIL";
-                isUpdateMode = true; showUpdatePrompt();
+        async function encryptEmbedding(perturbedEmb) {
+            clientLog("Starting Client-side Paillier Encryption of embedding vector...");
+            const progressContainer = gid('crypto-progress-container');
+            const progressBar = gid('crypto-progress-bar');
+            progressContainer.style.display = 'block';
+            const n = public_key_n, n_sq = n * n;
+            clientLog(`Scaling values by SCALE = 10^6 and rounding to BigInt...`);
+            const q = perturbedEmb.map(x => BigInt(Math.round(x * Number(SCALE))));
+            let norm_sq = 0n;
+            for (const qi of q) norm_sq += qi * qi;
+            clientLog("Encrypting precomputed norm term ||a||^2...");
+            const r_norm = BigInt(Math.floor(Math.random() * (Number(n) - 1))) + 1n;
+            const enc_norm_sq = (((norm_sq * n) + 1n) * bigintModPow(r_norm, n, n_sq)) % n_sq;
+            const enc_vector = [];
+            const batchSize = 32, t0 = performance.now();
+            for (let i = 0; i < q.length; i++) {
+                const r = BigInt(Math.floor(Math.random() * (Number(n) - 1))) + 1n;
+                const ct = (((q[i] * n) + 1n) * bigintModPow(r, n, n_sq)) % n_sq;
+                enc_vector.push(ct.toString());
+                if (i % batchSize === 0) {
+                    progressBar.style.width = `${Math.round((i / q.length) * 100)}%`;
+                    await new Promise(r => setTimeout(r, 0));
+                }
             }
-        } catch (err) {
-            clientLog(`Verification failed: ${err.message}`, "danger");
-            serverLog(`[Error] Verification failed: ${err.message}`, "danger");
-        } finally { validateActionButtons(); }
-    }
+            const t1 = performance.now();
+            progressBar.style.width = '100%';
+            setTimeout(() => progressContainer.style.display = 'none', 500);
+            clientLog(`Completed encryption of 512 values in ${((t1 - t0) / 1000).toFixed(2)}s!`, "success");
+            return { enc_vector, enc_norm_sq: enc_norm_sq.toString() };
+        }
 
-    window.addEventListener('load', () => {
-        checkServerHealth(); fetchKeyPair(); updateConfusionMatrixUI();
-    });
-</script>
+        function decryptDistance(encDistanceSqStr) {
+            clientLog("Decrypting distance ciphertext returned by cloud matching engine...");
+            const c = BigInt(encDistanceSqStr);
+            const n = public_key_n, n_sq = n * n;
+            const lambda = (private_key_p - 1n) * (private_key_q - 1n);
+            const mu = modInverse(lambda, n);
+            const u = bigintModPow(c, lambda, n_sq);
+            let m = ((u - 1n) / n * mu) % n;
+            if (m > n / 2n) m = m - n;
+            const distanceSq = Number(m) / Number(SCALE_SQ);
+            clientLog(`Dequantization: d² = ${distanceSq.toFixed(6)}`, "success");
+            return distanceSq;
+        }
+
+        async function runEnroll() {
+            const userId = gid('user-id').value.trim();
+            if (!userId) { alert("Please enter a username."); return; }
+            const password = gid('user-pw').value;
+            if (!password) { alert("Please enter a password to secure/update your biometric template."); return; }
+
+            // Gate: don't start the process until a face capture actually exists.
+            // If webcam is still streaming with no capture yet, wait for the
+            // auto face-scan to finish (it captures on its own once a face is
+            // confirmed) rather than firing an un-awaited capture and racing it.
+            if (!currentImageBase64 && selectedSource === 'webcam') {
+                if (stream) {
+                    clientLog("No capture yet -- waiting for face to be confirmed before enrolling.", "info");
+                    alert("Please wait for your face to be detected and captured (watch for the green confirmation) before enrolling.");
+                } else {
+                    alert("Please start the camera and capture your face first.");
+                }
+                return;
+            }
+            if (!currentImageBase64) { alert("No image captured yet."); return; }
+
+            // Gate: for webcam captures specifically, refuse to proceed on an
+            // unconfirmed (fallback centre-crop) capture -- this is the actual
+            // fix requested: only start the enroll pipeline once a face was
+            // positively confirmed by the detector.
+            if (selectedSource === 'webcam' && !lastCaptureFaceConfirmed) {
+                clientLog("Enrollment blocked: last capture did not have a confirmed face. Retake the photo.", "danger");
+                alert("No face was confirmed in your last capture. Please retake the photo and make sure your face is clearly visible and centered before enrolling.");
+                return;
+            }
+
+            document.querySelectorAll('.btn').forEach(b => b.disabled = true);
+            try {
+                const rawEmb = await getEmbedding(currentImageBase64);
+                const enrolled = await encryptEmbedding(applyPerturbation(rawEmb, parseFloat(epsilonInput.value)));
+                clientLog(`Transmitting 512 ciphertexts to cloud matching server's /enroll endpoint...`);
+                serverLog(`[Request] Incoming POST /api/client/enroll for user ID: '${userId}'`);
+                const res = await fetch(`${serverUrl}/api/client/enroll`, {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ user_id: userId, public_key_n: public_key_n.toString(), enc_vector: enrolled.enc_vector, enc_norm_sq: enrolled.enc_norm_sq, password })
+                });
+                if (!res.ok) { const e = await res.json(); throw new Error(e.detail || "Enrollment failed on server."); }
+                clientLog("Cloud database successfully enrolled new user template!", "success");
+                serverLog(`[Success] Template stored under key 'template:${userId}'. Count = ${parseInt(gid('db-count').textContent) + 1}`, "success");
+                gid('result-box').className = 'result-container';
+                gid('result-title').textContent = "Template Enrolled";
+                gid('result-desc').textContent = `User '${userId}' registered successfully.`;
+                gid('result-status').textContent = "OK";
+                refreshDatabaseView();
+                if (selectedSource === 'webcam') webcamActualUser = userId;
+                resetFormState();
+            } catch (err) {
+                clientLog(`Enrollment failed: ${err.message}`, "danger");
+                serverLog(`[Error] Enrollment failed: ${err.message}`, "danger");
+            } finally { validateActionButtons(); }
+        }
+
+        async function runVerify() {
+            const userId = gid('user-id').value.trim();
+            if (!userId) { alert("Please enter a username."); return; }
+
+            // Same capture gate as runEnroll(): never start the verify pipeline
+            // on a missing or unconfirmed webcam capture.
+            if (!currentImageBase64 && selectedSource === 'webcam') {
+                if (stream) {
+                    clientLog("No capture yet -- waiting for face to be confirmed before verifying.", "info");
+                    alert("Please wait for your face to be detected and captured (watch for the green confirmation) before verifying.");
+                } else {
+                    alert("Please start the camera and capture your face first.");
+                }
+                return;
+            }
+            if (!currentImageBase64) { alert("No image captured yet."); return; }
+
+            if (selectedSource === 'webcam' && !lastCaptureFaceConfirmed) {
+                clientLog("Verification blocked: last capture did not have a confirmed face. Retake the photo.", "danger");
+                alert("No face was confirmed in your last capture. Please retake the photo and make sure your face is clearly visible and centered before verifying.");
+                return;
+            }
+
+            document.querySelectorAll('.btn').forEach(b => b.disabled = true);
+            try {
+                const rawEmb = await getEmbedding(currentImageBase64);
+                const perturbedEmb = applyPerturbation(rawEmb, parseFloat(epsilonInput.value));
+                clientLog("Transmitting query vector to cloud verify endpoint...");
+                serverLog(`[Request] Incoming POST /verify for user ID: '${userId}'`);
+                const res = await fetch(`${serverUrl}/verify`, {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ user_id: userId, query_plain: perturbedEmb })
+                });
+                if (!res.ok) { const e = await res.json(); throw new Error(e.detail || "Verification failed on server."); }
+                const data = await res.json();
+                serverLog(`[Compute] Loaded ciphertexts for '${userId}'. Computed homomorphic distance.`, "info");
+                serverLog(`[Response] Returning serialized distance ciphertext...`);
+                clientLog("Received ciphertext payload. Unpacking...");
+                const unpackData = await fetch(`${serverUrl}/api/client/unpack_distance`, {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ enc_distance_sq: data.enc_distance_sq })
+                }).then(r => r.json());
+                const distanceSq = decryptDistance(unpackData.ciphertext);
+                const threshold = 0.6, isMatch = distanceSq <= threshold;
+                clientLog(`Threshold: ${distanceSq.toFixed(4)} <= ${threshold} -> ${isMatch ? 'GRANTED' : 'DENIED'}`, isMatch ? "success" : "danger");
+
+                // Confusion Matrix
+                const actualId = selectedSource === 'webcam' ? webcamActualUser : selectedSource;
+                const isGTMatch = actualId === userId;
+                if (isGTMatch) {
+                    if (isMatch) { matrixStats.tp++; clientLog("Matrix: True Positive (TP).", "info"); }
+                    else { matrixStats.fn++; clientLog("Matrix: False Negative (FN).", "warning"); }
+                } else {
+                    if (isMatch) { matrixStats.fp++; clientLog("Matrix: False Positive (FP).", "danger"); }
+                    else { matrixStats.tn++; clientLog("Matrix: True Negative (TN).", "info"); }
+                }
+                updateConfusionMatrixUI();
+
+                const resultBox = gid('result-box');
+                if (isMatch) {
+                    resultBox.className = 'result-container granted';
+                    gid('result-title').textContent = "Access Granted";
+                    gid('result-desc').textContent = `Identity verified for user '${userId}' (d² = ${distanceSq.toFixed(4)}).`;
+                    gid('result-status').textContent = "PASS";
+                } else {
+                    resultBox.className = 'result-container denied';
+                    gid('result-title').textContent = "Access Denied";
+                    gid('result-desc').textContent = `Biometric mismatch for user '${userId}' (d² = ${distanceSq.toFixed(4)}).`;
+                    gid('result-status').textContent = "FAIL";
+                    isUpdateMode = true; showUpdatePrompt();
+                }
+            } catch (err) {
+                clientLog(`Verification failed: ${err.message}`, "danger");
+                serverLog(`[Error] Verification failed: ${err.message}`, "danger");
+            } finally { validateActionButtons(); }
+        }
+
+        window.addEventListener('load', () => {
+            checkServerHealth(); fetchKeyPair(); updateConfusionMatrixUI();
+        });
+    </script>
 </body>
+
 </html>
