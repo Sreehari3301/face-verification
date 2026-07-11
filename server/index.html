@@ -8,6 +8,7 @@
     <link
         href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap"
         rel="stylesheet">
+    <script defer src="https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/dist/face-api.min.js"></script>
     <style>
         :root {
             --bg-primary: #0a0b10;
@@ -875,6 +876,8 @@
         let countdownTimer = null, countdownTimerActive = false;
         let isUpdateMode = false, lastEnteredUsername = "";
         let lastCaptureFaceConfirmed = false;
+        let modelsReady = false;
+        const MODEL_URL = 'https://cdn.jsdelivr.net/gh/justadudewhohacks/face-api.js@master/weights';
 
         const PRESETS = {
             alice: `data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 160" width="160" height="160"><rect width="100%" height="100%" fill="%231e1e2f"/><circle cx="80" cy="75" r="35" fill="%23fbcfe8"/><path d="M40 135c0-20 20-30 40-30s40 10 40 30" fill="%23fbcfe8"/><path d="M50 70c0 0 10-15 30-15s30 15 30 15" stroke="%23db2777" stroke-width="6" fill="none"/><circle cx="70" cy="75" r="4" fill="%231e1e2f"/><circle cx="90" cy="75" r="4" fill="%231e1e2f"/><path d="M72 90q8 4 16 0" stroke="%23db2777" stroke-width="3" fill="none"/></svg>`,
@@ -973,6 +976,17 @@
             clientLog("Confusion matrix statistics reset.");
         }
 
+        async function loadFaceModels() {
+            clientLog("Loading face detection models (one-time download)...");
+            try {
+                await faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL);
+                modelsReady = true;
+                clientLog("Face detection models loaded. Live face confirmation is now active.", "success");
+            } catch (err) {
+                clientLog(`Failed to load face detection models: ${err.message}. Webcam capture will be disabled -- use a preset avatar instead.`, "danger");
+            }
+        }
+
         function showUpdatePrompt() {
             setDisplay('group-password', 'flex');
             gid('label-password').textContent = "Enter PIN to change saved image";
@@ -1006,80 +1020,80 @@
                 faceScanPulse = (faceScanPulse + 1) % 20;
                 const pulse = 0.55 + Math.sin(faceScanPulse / 20 * Math.PI * 2) * 0.25;
 
-                if ('FaceDetector' in window) {
-                    try {
-                        const tmp = document.createElement('canvas');
-                        tmp.width = webcam.videoWidth || 400; tmp.height = webcam.videoHeight || 300;
-                        const tctx = tmp.getContext('2d');
-                        tctx.translate(tmp.width, 0); tctx.scale(-1, 1);
-                        tctx.drawImage(webcam, 0, 0, tmp.width, tmp.height);
-
-                        const faces = await new FaceDetector({ fastMode: true, maxDetectedFaces: 1 }).detect(tmp);
-                        if (faces.length > 0) {
-                            faceDetectedFrames++;
-                            const b = faces[0].boundingBox;
-                            const pad = Math.max(b.width, b.height) * 0.35;
-                            const cx = Math.max(0, b.x - pad), cy = Math.max(0, b.y - pad * 1.2);
-                            const cw = Math.min(tmp.width, b.x + b.width + pad) - cx;
-                            const ch = Math.min(tmp.height, b.y + b.height + pad) - cy;
-
-                            // Draw pulsing crop box
-                            ctx.save();
-                            ctx.strokeStyle = `rgba(16,185,129,${pulse})`;
-                            ctx.lineWidth = 2.5;
-                            ctx.shadowColor = 'rgba(16,185,129,.7)';
-                            ctx.shadowBlur = 8;
-                            ctx.strokeRect(cx, cy, cw, ch);
-                            // Corner accents
-                            const cs = 14;
-                            ctx.lineWidth = 3.5;
-                            [[cx, cy], [cx + cw, cy], [cx, cy + ch], [cx + cw, cy + ch]].forEach(([x, y], i) => {
-                                ctx.beginPath();
-                                ctx.moveTo(x + (i % 2 === 0 ? 0 : -cs), y); ctx.lineTo(x + (i % 2 === 0 ? cs : -cs), y);
-                                ctx.moveTo(x, y + (i < 2 ? 0 : -cs)); ctx.lineTo(x, y + (i < 2 ? cs : -cs));
-                                ctx.stroke();
-                            });
-                            ctx.restore();
-
-                            if (faceDetectedFrames >= FACE_CONFIRM_FRAMES) {
-                                // Face stably detected — capture immediately
-                                badge.textContent = '✓ Face detected! Capturing...';
-                                badge.style.background = 'rgba(16,185,129,.25)';
-                                badge.style.border = '1px solid rgba(16,185,129,.6)';
-                                badge.style.color = '#10b981';
-                                if (textSpan) textSpan.textContent = 'Face detected! Capturing...';
-                                stopFaceScan();
-                                await captureSnapshot();
-                            } else {
-                                badge.textContent = '✓ FACE DETECTED — Hold still...';
-                                badge.style.background = 'rgba(16,185,129,.15)';
-                                badge.style.border = '1px solid rgba(16,185,129,.4)';
-                                badge.style.color = '#10b981';
-                                if (textSpan) textSpan.textContent = 'Face detected — Hold still...';
-                            }
-                        } else {
-                            faceDetectedFrames = 0; // reset streak
-                            drawNoFaceBox(ctx, canvas, pulse);
-                            badge.textContent = '⚠ No face — align your face to the camera';
-                            badge.style.background = 'rgba(245,158,11,.12)';
-                            badge.style.border = '1px solid rgba(245,158,11,.35)';
-                            badge.style.color = '#f59e0b';
-                            if (textSpan) textSpan.textContent = 'Align your face...';
-                        }
-                    } catch (e) { drawNoFaceBox(ctx, canvas, pulse); }
-                } else {
-                    // No FaceDetector API — draw centre-crop box and auto-capture after 1 s
+                if (!modelsReady) {
+                    // Never auto-capture before real face detection is available.
+                    // This replaces the old "no FaceDetector API -> blind
+                    // centre-crop after ~1.2s" fallback, which is exactly what
+                    // was causing non-face images to get captured and pushed
+                    // into the pipeline.
                     drawNoFaceBox(ctx, canvas, pulse);
-                    badge.textContent = 'ℹ CENTRE CROP ACTIVE — capturing shortly...';
+                    badge.textContent = '⏳ Loading face detection models...';
                     badge.style.background = 'rgba(99,102,241,.12)';
                     badge.style.border = '1px solid rgba(99,102,241,.3)';
                     badge.style.color = 'var(--accent-primary)';
-                    if (textSpan) textSpan.textContent = 'Align your face...';
-                    faceDetectedFrames++;
-                    if (faceDetectedFrames >= 4) { // ~1.2 s settle time
-                        stopFaceScan();
-                        await captureSnapshot();
+                    if (textSpan) textSpan.textContent = 'Loading face detection...';
+                    return;
+                }
+
+                try {
+                    const tmp = document.createElement('canvas');
+                    tmp.width = webcam.videoWidth || 400; tmp.height = webcam.videoHeight || 300;
+                    const tctx = tmp.getContext('2d');
+                    tctx.translate(tmp.width, 0); tctx.scale(-1, 1);
+                    tctx.drawImage(webcam, 0, 0, tmp.width, tmp.height);
+
+                    const detection = await faceapi.detectSingleFace(tmp, new faceapi.TinyFaceDetectorOptions());
+
+                    if (detection) {
+                        faceDetectedFrames++;
+                        const b = detection.box;
+                        const pad = Math.max(b.width, b.height) * 0.35;
+                        const cx = Math.max(0, b.x - pad), cy = Math.max(0, b.y - pad * 1.2);
+                        const cw = Math.min(tmp.width, b.x + b.width + pad) - cx;
+                        const ch = Math.min(tmp.height, b.y + b.height + pad) - cy;
+
+                        ctx.save();
+                        ctx.strokeStyle = `rgba(16,185,129,${pulse})`;
+                        ctx.lineWidth = 2.5;
+                        ctx.shadowColor = 'rgba(16,185,129,.7)';
+                        ctx.shadowBlur = 8;
+                        ctx.strokeRect(cx, cy, cw, ch);
+                        const cs = 14;
+                        ctx.lineWidth = 3.5;
+                        [[cx, cy], [cx + cw, cy], [cx, cy + ch], [cx + cw, cy + ch]].forEach(([x, y], i) => {
+                            ctx.beginPath();
+                            ctx.moveTo(x + (i % 2 === 0 ? 0 : -cs), y); ctx.lineTo(x + (i % 2 === 0 ? cs : -cs), y);
+                            ctx.moveTo(x, y + (i < 2 ? 0 : -cs)); ctx.lineTo(x, y + (i < 2 ? cs : -cs));
+                            ctx.stroke();
+                        });
+                        ctx.restore();
+
+                        if (faceDetectedFrames >= FACE_CONFIRM_FRAMES) {
+                            badge.textContent = '✓ Face detected! Capturing...';
+                            badge.style.background = 'rgba(16,185,129,.25)';
+                            badge.style.border = '1px solid rgba(16,185,129,.6)';
+                            badge.style.color = '#10b981';
+                            if (textSpan) textSpan.textContent = 'Face detected! Capturing...';
+                            stopFaceScan();
+                            await captureSnapshot();
+                        } else {
+                            badge.textContent = '✓ FACE DETECTED — Hold still...';
+                            badge.style.background = 'rgba(16,185,129,.15)';
+                            badge.style.border = '1px solid rgba(16,185,129,.4)';
+                            badge.style.color = '#10b981';
+                            if (textSpan) textSpan.textContent = 'Face detected — Hold still...';
+                        }
+                    } else {
+                        faceDetectedFrames = 0;
+                        drawNoFaceBox(ctx, canvas, pulse);
+                        badge.textContent = '⚠ No face — align your face to the camera';
+                        badge.style.background = 'rgba(245,158,11,.12)';
+                        badge.style.border = '1px solid rgba(245,158,11,.35)';
+                        badge.style.color = '#f59e0b';
+                        if (textSpan) textSpan.textContent = 'Align your face...';
                     }
+                } catch (e) {
+                    drawNoFaceBox(ctx, canvas, pulse);
                 }
             }, 300);
         }
@@ -1220,6 +1234,9 @@
                 stream = await navigator.mediaDevices.getUserMedia({ video: { width: 400, height: 300 } });
                 webcam.srcObject = stream; btnCamera.textContent = 'Stop Camera'; btnSnap.disabled = false;
                 clientLog("Webcam stream started.");
+                if (!modelsReady) {
+                    clientLog("Face detection models still loading -- capture will be enabled once they're ready.", "info");
+                }
                 startFaceWatch();
                 updateCaptureUI();
             } catch (err) {
@@ -1251,47 +1268,44 @@
             let cropBox = null;
             let faceConfirmed = false;
 
-            // Try browser FaceDetector API (Chrome 70+, Edge 79+)
-            if ('FaceDetector' in window) {
+            if (modelsReady) {
                 try {
-                    const detector = new FaceDetector({ fastMode: true, maxDetectedFaces: 1 });
-                    const faces = await detector.detect(full);
-                    if (faces.length > 0) {
-                        const b = faces[0].boundingBox;
-                        const pad = Math.max(b.width, b.height) * 0.35; // 35% padding
+                    const detection = await faceapi.detectSingleFace(full, new faceapi.TinyFaceDetectorOptions());
+                    if (detection) {
+                        const b = detection.box;
+                        const pad = Math.max(b.width, b.height) * 0.35;
                         cropBox = {
                             x: Math.max(0, b.x - pad),
-                            y: Math.max(0, b.y - pad * 1.2), // extra top for forehead
+                            y: Math.max(0, b.y - pad * 1.2),
                             w: Math.min(full.width, b.x + b.width + pad) - Math.max(0, b.x - pad),
                             h: Math.min(full.height, b.y + b.height + pad) - Math.max(0, b.y - pad * 1.2)
                         };
                         faceConfirmed = true;
                         clientLog(`Face detected at (${Math.round(b.x)},${Math.round(b.y)}) — cropping to face region.`, "info");
                     }
-                } catch (e) { /* FaceDetector failed, fall through */ }
+                } catch (e) { /* detection failed, fall through */ }
             }
 
-            // Fallback: centre-square crop (covers most face-forward webcam poses).
-            // NOTE: this path does NOT confirm a real face is present -- it's a
-            // best-effort guess. lastCaptureFaceConfirmed stays false here on
-            // purpose, so runEnroll()/runVerify() know this capture is
-            // unconfirmed and can warn the user instead of silently proceeding
-            // as if a face had actually been verified.
+            // No confirmed face: still render a preview crop so the user can see
+            // what was captured and retake, but faceConfirmed stays false, and
+            // runEnroll()/runVerify() will refuse to proceed on this capture.
+            // This is the actual fix -- previously this branch would silently
+            // produce a usable image that the pipeline treated the same as a
+            // real face capture.
             if (!cropBox) {
                 const side = Math.min(full.width, full.height) * 0.72;
                 cropBox = {
                     x: (full.width - side) / 2,
-                    y: (full.height - side) / 2 - full.height * 0.04, // shift up slightly for forehead
+                    y: (full.height - side) / 2 - full.height * 0.04,
                     w: side, h: side
                 };
-                if (!('FaceDetector' in window)) {
-                    clientLog("FaceDetector API not available — using centre-crop fallback (face not confirmed).", "info");
+                if (!modelsReady) {
+                    clientLog("Face detection models not loaded yet — cannot confirm a face. Capture rejected.", "danger");
                 } else {
-                    clientLog("No face detected — using centre-crop fallback (face not confirmed).", "info");
+                    clientLog("No face detected in frame — capture rejected. Align your face and try again.", "danger");
                 }
             }
 
-            // Render cropped face to a square output canvas (160×160 for FaceNet)
             const out = document.createElement('canvas');
             out.width = 160; out.height = 160;
             const octx = out.getContext('2d');
@@ -1304,7 +1318,7 @@
             if (faceConfirmed) {
                 clientLog("Face-only snapshot captured and cropped successfully. Face confirmed.", "success");
             } else {
-                clientLog("Snapshot captured, but no face was positively confirmed by the detector.", "danger");
+                clientLog("Snapshot preview shown, but no face was confirmed. Retake before enrolling/verifying.", "danger");
             }
             validateActionButtons(); updateCaptureUI();
         }
@@ -1590,7 +1604,7 @@
         }
 
         window.addEventListener('load', () => {
-            checkServerHealth(); fetchKeyPair(); updateConfusionMatrixUI();
+            checkServerHealth(); fetchKeyPair(); updateConfusionMatrixUI(); loadFaceModels();
         });
     </script>
 </body>
