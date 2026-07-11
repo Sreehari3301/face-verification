@@ -159,7 +159,7 @@
 
         .config-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
             gap: 1rem;
         }
 
@@ -891,36 +891,54 @@
             }
         }
 
+        function updateCaptureUI() {
+            if (selectedSource === 'webcam') {
+                if (currentImageBase64) {
+                    webcam.style.display = 'none';
+                    photoPreview.style.display = 'block';
+                    placeholder.style.display = 'none';
+                } else if (stream) {
+                    webcam.style.display = 'block';
+                    photoPreview.style.display = 'none';
+                    placeholder.style.display = 'none';
+                } else {
+                    webcam.style.display = 'none';
+                    photoPreview.style.display = 'none';
+                    placeholder.style.display = 'flex';
+                }
+            } else {
+                webcam.style.display = 'none';
+                photoPreview.style.display = 'block';
+                placeholder.style.display = 'none';
+            }
+        }
+
         function selectSource(source, evt) {
             document.querySelectorAll('.avatar-option').forEach(el => el.classList.remove('selected'));
             (evt || window.event).currentTarget.classList.add('selected');
             selectedSource = source;
 
             if (source === 'webcam') {
-                photoPreview.style.display = 'none';
                 currentImageBase64 = null;
                 if (!stream) {
                     toggleCamera(); // Automatically starts camera & autoScan
                 } else {
-                    webcam.style.display = 'block';
-                    placeholder.style.display = 'none';
                     startAutoScan();
+                    updateCaptureUI();
                 }
                 btnCamera.style.display = 'inline-flex';
                 btnSnap.style.display = 'inline-flex';
                 validateActionButtons();
             } else {
                 stopCamera();
-                webcam.style.display = 'none';
                 photoPreview.src = PRESETS[source];
-                photoPreview.style.display = 'block';
-                placeholder.style.display = 'none';
                 btnCamera.style.display = 'none';
                 btnSnap.style.display = 'none';
 
                 currentImageBase64 = PRESETS[source];
                 clientLog(`Selected preset face: ${source.toUpperCase()}`);
                 validateActionButtons();
+                updateCaptureUI();
                 runVerify();
             }
         }
@@ -946,12 +964,11 @@
             try {
                 stream = await navigator.mediaDevices.getUserMedia({ video: { width: 400, height: 300 } });
                 webcam.srcObject = stream;
-                webcam.style.display = 'block';
-                placeholder.style.display = 'none';
                 btnCamera.textContent = 'Stop Camera';
                 btnSnap.disabled = false;
                 clientLog("Webcam stream started.");
                 startAutoScan();
+                updateCaptureUI();
             } catch (err) {
                 clientLog(`Webcam access denied or unavailable: ${err.name} - ${err.message}`, "danger");
                 alert(`Unable to access webcam (${err.name}). Please allow camera access in your browser's site settings, or select a preset face avatar.`);
@@ -963,12 +980,11 @@
                 stream.getTracks().forEach(track => track.stop());
                 stream = null;
                 webcam.srcObject = null;
-                webcam.style.display = 'none';
-                placeholder.style.display = 'flex';
                 btnCamera.textContent = 'Start Camera';
                 btnSnap.disabled = true;
                 clientLog("Webcam stream stopped.");
                 stopAutoScan();
+                updateCaptureUI();
             }
         }
 
@@ -984,8 +1000,6 @@
 
             currentImageBase64 = canvas.toDataURL('image/jpeg');
             photoPreview.src = currentImageBase64;
-            photoPreview.style.display = 'block';
-            webcam.style.display = 'none';
             stopCamera();
 
             clientLog("Webcam snapshot captured successfully.");
