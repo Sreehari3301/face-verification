@@ -769,6 +769,122 @@
             epsilonVal.textContent = e.target.value;
         });
 
+        let autoScanInterval = null;
+        let isScanInProgress = false;
+
+        function startAutoScan() {
+            if (autoScanInterval) return;
+            clientLog("Auto-verification scanner active. Present your face to the camera...", "info");
+            autoScanInterval = setInterval(async () => {
+                if (selectedSource !== 'webcam' || !stream) {
+                    stopAutoScan();
+                    return;
+                }
+                if (isScanInProgress) return;
+                
+                isScanInProgress = true;
+                
+                // Draw current frame in memory
+                const canvas = document.createElement('canvas');
+                canvas.width = webcam.videoWidth || 400;
+                canvas.height = webcam.videoHeight || 300;
+                const ctx = canvas.getContext('2d');
+                ctx.translate(canvas.width, 0);
+                ctx.scale(-1, 1);
+                ctx.drawImage(webcam, 0, 0, canvas.width, canvas.height);
+                const frameBase64 = canvas.toDataURL('image/jpeg');
+
+                try {
+                    const userId = document.getElementById('user-id').value.trim();
+                    if (!userId) {
+                        isScanInProgress = false;
+                        return;
+                    }
+
+                    // Pulse capture container to indicate scan
+                    const capContainer = document.querySelector('.capture-container');
+                    if (capContainer) {
+                        capContainer.style.borderColor = 'var(--accent-primary)';
+                        setTimeout(() => {
+                            capContainer.style.borderColor = 'var(--border-color)';
+                        }, 500);
+                    }
+
+                    const rawEmb = await getEmbedding(frameBase64);
+                    const perturbedEmb = applyPerturbation(rawEmb, parseFloat(epsilonInput.value));
+
+                    clientLog("Auto-scan: checking face match against server...");
+                    serverLog(`[Request] Auto-verify for user ID: '${userId}'`);
+
+                    const res = await fetch(`${serverUrl}/verify`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            user_id: userId,
+                            query_plain: perturbedEmb
+                        })
+                    });
+
+                    if (!res.ok) {
+                        const err = await res.json();
+                        throw new Error(err.detail || "Verification failed on server.");
+                    }
+
+                    const data = await res.json();
+                    serverLog(`[Compute] Loaded ciphertexts for '${userId}'. Computed homomorphic distance successfully.`, "info");
+
+                    const unpackRes = await fetch(`${serverUrl}/api/client/unpack_distance`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ enc_distance_sq: data.enc_distance_sq })
+                    });
+
+                    const unpackData = await unpackRes.json();
+                    const distanceSq = decryptDistance(unpackData.ciphertext);
+
+                    const threshold = 0.6;
+                    const isMatch = distanceSq <= threshold;
+
+                    clientLog(`Auto-scan match verification: ${distanceSq.toFixed(4)} <= ${threshold} -> ${isMatch ? 'GRANTED' : 'DENIED'}`, isMatch ? "success" : "danger");
+
+                    const resultBox = document.getElementById('result-box');
+                    if (isMatch) {
+                        resultBox.className = 'result-container granted';
+                        document.getElementById('result-title').textContent = "Access Granted";
+                        document.getElementById('result-desc').textContent = `Identity verified for user '${userId}' (d² = ${distanceSq.toFixed(4)}).`;
+                        document.getElementById('result-status').textContent = "PASS";
+                        
+                        // Freeze camera frame
+                        currentImageBase64 = frameBase64;
+                        photoPreview.src = frameBase64;
+                        photoPreview.style.display = 'block';
+                        webcam.style.display = 'none';
+                        
+                        stopCamera(); // calls stopAutoScan() inside
+                        clientLog("Access GRANTED. Scanning complete.", "success");
+                    } else {
+                        resultBox.className = 'result-container denied';
+                        document.getElementById('result-title').textContent = "Access Denied";
+                        document.getElementById('result-desc').textContent = `Biometric mismatch for user '${userId}' (d² = ${distanceSq.toFixed(4)}).`;
+                        document.getElementById('result-status').textContent = "FAIL";
+                    }
+                } catch (err) {
+                    clientLog(`Auto-scan failed: ${err.message}`, "danger");
+                } finally {
+                    isScanInProgress = false;
+                }
+            }, 2500); // Check every 2.5 seconds
+        }
+
+        function stopAutoScan() {
+            if (autoScanInterval) {
+                clearInterval(autoScanInterval);
+                autoScanInterval = null;
+                isScanInProgress = false;
+                clientLog("Auto-scanning paused.");
+            }
+        }
+
         function selectSource(source, evt) {
             document.querySelectorAll('.avatar-option').forEach(el => el.classList.remove('selected'));
             (evt || window.event).currentTarget.classList.add('selected');
@@ -776,16 +892,16 @@
 
             if (source === 'webcam') {
                 photoPreview.style.display = 'none';
-                if (stream) {
+                currentImageBase64 = null;
+                if (!stream) {
+                    toggleCamera(); // Automatically starts camera & autoScan
+                } else {
                     webcam.style.display = 'block';
                     placeholder.style.display = 'none';
-                } else {
-                    webcam.style.display = 'none';
-                    placeholder.style.display = 'flex';
+                    startAutoScan();
                 }
                 btnCamera.style.display = 'inline-flex';
                 btnSnap.style.display = 'inline-flex';
-                currentImageBase64 = null;
                 validateActionButtons();
             } else {
                 stopCamera();
@@ -828,6 +944,7 @@
                 btnCamera.textContent = 'Stop Camera';
                 btnSnap.disabled = false;
                 clientLog("Webcam stream started.");
+                startAutoScan();
             } catch (err) {
                 clientLog(`Webcam access denied or unavailable: ${err.name} - ${err.message}`, "danger");
                 alert(`Unable to access webcam (${err.name}). Please allow camera access in your browser's site settings, or select a preset face avatar.`);
@@ -844,6 +961,7 @@
                 btnCamera.textContent = 'Start Camera';
                 btnSnap.disabled = true;
                 clientLog("Webcam stream stopped.");
+                stopAutoScan();
             }
         }
 
@@ -887,10 +1005,11 @@
 
         function validateActionButtons() {
             const hasKey = public_key_n !== null;
-            const hasImage = currentImageBase64 !== null;
+            const hasImage = currentImageBase64 !== null || (selectedSource === 'webcam' && stream !== null);
             btnEnroll.disabled = !(hasKey && hasImage);
             btnVerify.disabled = !(hasKey && hasImage);
         }
+
 
         async function checkServerHealth() {
             try {
@@ -1146,6 +1265,9 @@
             document.querySelectorAll('.btn').forEach(b => b.disabled = true);
 
             try {
+                if (!currentImageBase64 && selectedSource === 'webcam' && stream) {
+                    captureSnapshot();
+                }
                 const rawEmb = await getEmbedding(currentImageBase64);
                 const perturbedEmb = applyPerturbation(rawEmb, parseFloat(epsilonInput.value));
                 const enrolled = await encryptEmbedding(perturbedEmb);
@@ -1196,10 +1318,14 @@
             document.querySelectorAll('.btn').forEach(b => b.disabled = true);
 
             try {
+                if (!currentImageBase64 && selectedSource === 'webcam' && stream) {
+                    captureSnapshot();
+                }
                 const rawEmb = await getEmbedding(currentImageBase64);
                 const perturbedEmb = applyPerturbation(rawEmb, parseFloat(epsilonInput.value));
 
                 clientLog("Transmitting query vector to cloud verify endpoint...");
+
                 serverLog(`[Request] Incoming POST /verify for user ID: '${userId}'`);
 
                 const res = await fetch(`${serverUrl}/verify`, {
