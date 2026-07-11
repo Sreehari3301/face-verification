@@ -87,11 +87,12 @@ def get_store():
     return InMemoryStore()
 
 
-def serialize_template(enc_vector_b64: list[str], enc_norm_sq_b64: str, public_key_n: int) -> str:
+def serialize_template(enc_vector_b64: list[str], enc_norm_sq_b64: str, public_key_n: int, password_hash: str | None = None) -> str:
     return json.dumps({
         "enc_vector": enc_vector_b64,
         "enc_norm_sq": enc_norm_sq_b64,
         "public_key_n": public_key_n,
+        "password_hash": password_hash,
     })
 
 

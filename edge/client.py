@@ -60,7 +60,7 @@ class EdgeVerificationClient:
         return paillier.EncryptedNumber(pub_key, payload["ciphertext"], payload["exponent"])
 
 
-    def enroll(self, user_id: str, embedding: np.ndarray, apply_perturbation: bool = True):
+    def enroll(self, user_id: str, embedding: np.ndarray, password: str = "", apply_perturbation: bool = True):
         emb = self.perturb.apply(embedding) if apply_perturbation else embedding
         enrolled = self.crypto.encrypt_embedding(emb)
 
@@ -69,6 +69,7 @@ class EdgeVerificationClient:
             "public_key_n": self.crypto.public_key.n,
             "enc_vector": [self._serialize_encrypted_number(c) for c in enrolled["enc_vector"]],
             "enc_norm_sq": self._serialize_encrypted_number(enrolled["enc_norm_sq"]),
+            "password": password
         })
         resp.raise_for_status()
         return resp.json()

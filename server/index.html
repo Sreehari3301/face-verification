@@ -159,7 +159,7 @@
 
         .config-grid {
             display: grid;
-            grid-template-columns: 1fr 1fr;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
             gap: 1rem;
         }
 
@@ -176,7 +176,8 @@
         }
 
         select,
-        input[type="text"] {
+        input[type="text"],
+        input[type="password"] {
             background-color: rgba(10, 11, 16, 0.5);
             border: 1px solid var(--border-color);
             color: var(--text-primary);
@@ -189,7 +190,8 @@
         }
 
         select:focus,
-        input[type="text"]:focus {
+        input[type="text"]:focus,
+        input[type="password"]:focus {
             border-color: var(--accent-primary);
             box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.2);
         }
@@ -582,6 +584,10 @@
                 <div class="input-group">
                     <label for="user-id">User Identity</label>
                     <input type="text" id="user-id" value="alice" placeholder="Enter username">
+                </div>
+                <div class="input-group">
+                    <label for="user-pw">Update Password</label>
+                    <input type="password" id="user-pw" placeholder="Password (required)">
                 </div>
             </div>
 
@@ -1261,6 +1267,11 @@
                 alert("Please enter a username.");
                 return;
             }
+            const password = document.getElementById('user-pw').value;
+            if (!password) {
+                alert("Please enter a password to secure/update your biometric template.");
+                return;
+            }
 
             document.querySelectorAll('.btn').forEach(b => b.disabled = true);
 
@@ -1282,7 +1293,8 @@
                         user_id: userId,
                         public_key_n: public_key_n.toString(),
                         enc_vector: enrolled.enc_vector,
-                        enc_norm_sq: enrolled.enc_norm_sq
+                        enc_norm_sq: enrolled.enc_norm_sq,
+                        password: password
                     })
                 });
 

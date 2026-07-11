@@ -60,6 +60,8 @@ class EnrollRequest(BaseModel):
     public_key_n: int
     enc_vector: list[str]   # base64-serialized EncryptedNumbers
     enc_norm_sq: str        # base64-serialized EncryptedNumber
+    password: str | None = None
+
 
 
 class VerifyRequest(BaseModel):
@@ -92,6 +94,8 @@ class ClientEnrollRequest(BaseModel):
     public_key_n: str
     enc_vector: list[str]
     enc_norm_sq: str
+    password: str
+
 
 
 class UnpackRequest(BaseModel):
@@ -144,6 +148,18 @@ def generate_keys(key_length: int = 1024):
 @app.post("/api/client/enroll")
 def client_enroll(req: ClientEnrollRequest):
     try:
+        user_key = f"template:{req.user_id}"
+        existing_raw = STORE.get(user_key)
+        
+        import hashlib
+        pw_hash = hashlib.sha256(req.password.encode("utf-8")).hexdigest() if req.password else ""
+        
+        if existing_raw:
+            existing_template = deserialize_template(existing_raw)
+            stored_hash = existing_template.get("password_hash")
+            if stored_hash and stored_hash != pw_hash:
+                raise HTTPException(status_code=403, detail="Incorrect password. Cannot overwrite existing template.")
+
         pub_n = int(req.public_key_n)
         public_key = paillier.PaillierPublicKey(n=pub_n)
         
@@ -155,16 +171,19 @@ def client_enroll(req: ClientEnrollRequest):
         enc_norm_sq_num = paillier.EncryptedNumber(public_key, int(req.enc_norm_sq), 0)
         enc_norm_sq_b64 = _serialize_encrypted_number(enc_norm_sq_num, public_key)
         
-        template_json = serialize_template(enc_vector_b64, enc_norm_sq_b64, pub_n)
-        STORE.set(f"template:{req.user_id}", template_json)
-        if hasattr(STORE, "increment_count"):
+        template_json = serialize_template(enc_vector_b64, enc_norm_sq_b64, pub_n, pw_hash)
+        STORE.set(user_key, template_json)
+        if hasattr(STORE, "increment_count") and not existing_raw:
             STORE.increment_count()
             
         return {"status": "enrolled", "user_id": req.user_id, "dims": len(req.enc_vector)}
+    except HTTPException as e:
+        raise e
     except Exception as e:
         import traceback
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=f"Enrollment failed on server: {str(e)}")
+
 
 
 
@@ -183,15 +202,30 @@ def unpack_distance(req: UnpackRequest):
 @app.post("/enroll")
 def enroll(req: EnrollRequest):
     """Stores a ciphertext template. Server never sees a raw embedding here."""
-    # We keep the EncryptedNumbers serialized exactly as the client sent
-    # them (already base64 strings) -- no need to round-trip through
-    # phe.EncryptedNumber objects just to store them.
-    template_json = serialize_template(req.enc_vector, req.enc_norm_sq, req.public_key_n)
-    STORE.set(f"template:{req.user_id}", template_json)
-    if hasattr(STORE, "increment_count"):
-        STORE.increment_count()
+    try:
+        user_key = f"template:{req.user_id}"
+        existing_raw = STORE.get(user_key)
+        
+        import hashlib
+        pw_hash = hashlib.sha256(req.password.encode("utf-8")).hexdigest() if req.password else ""
+        
+        if existing_raw:
+            existing_template = deserialize_template(existing_raw)
+            stored_hash = existing_template.get("password_hash")
+            if stored_hash and stored_hash != pw_hash:
+                raise HTTPException(status_code=403, detail="Incorrect password. Cannot overwrite existing template.")
 
-    return {"status": "enrolled", "user_id": req.user_id, "dims": len(req.enc_vector)}
+        template_json = serialize_template(req.enc_vector, req.enc_norm_sq, req.public_key_n, pw_hash)
+        STORE.set(user_key, template_json)
+        if hasattr(STORE, "increment_count") and not existing_raw:
+            STORE.increment_count()
+
+        return {"status": "enrolled", "user_id": req.user_id, "dims": len(req.enc_vector)}
+    except HTTPException as e:
+        raise e
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Enrollment failed: {str(e)}")
+
 
 
 @app.post("/verify")
