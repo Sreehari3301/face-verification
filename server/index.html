@@ -605,18 +605,63 @@ tr:last-child td{border-bottom:none}
         updateCaptureUI();
     }
 
-    function captureSnapshot() {
-        const canvas = document.createElement('canvas');
-        canvas.width = webcam.videoWidth || 400; canvas.height = webcam.videoHeight || 300;
-        const ctx = canvas.getContext('2d');
-        ctx.translate(canvas.width, 0); ctx.scale(-1, 1);
-        ctx.drawImage(webcam, 0, 0, canvas.width, canvas.height);
-        currentImageBase64 = canvas.toDataURL('image/jpeg');
+    async function captureSnapshot() {
+        // Draw full mirrored frame to a temp canvas first
+        const full = document.createElement('canvas');
+        full.width = webcam.videoWidth || 400; full.height = webcam.videoHeight || 300;
+        const fctx = full.getContext('2d');
+        fctx.translate(full.width, 0); fctx.scale(-1, 1);
+        fctx.drawImage(webcam, 0, 0, full.width, full.height);
+
+        let cropBox = null;
+
+        // Try browser FaceDetector API (Chrome 70+, Edge 79+)
+        if ('FaceDetector' in window) {
+            try {
+                const detector = new FaceDetector({ fastMode: true, maxDetectedFaces: 1 });
+                const faces = await detector.detect(full);
+                if (faces.length > 0) {
+                    const b = faces[0].boundingBox;
+                    const pad = Math.max(b.width, b.height) * 0.35; // 35% padding
+                    cropBox = {
+                        x: Math.max(0, b.x - pad),
+                        y: Math.max(0, b.y - pad * 1.2), // extra top for forehead
+                        w: Math.min(full.width,  b.x + b.width  + pad)   - Math.max(0, b.x - pad),
+                        h: Math.min(full.height, b.y + b.height + pad)   - Math.max(0, b.y - pad * 1.2)
+                    };
+                    clientLog(`Face detected at (${Math.round(b.x)},${Math.round(b.y)}) — cropping to face region.`, "info");
+                }
+            } catch (e) { /* FaceDetector failed, fall through */ }
+        }
+
+        // Fallback: centre-square crop (covers most face-forward webcam poses)
+        if (!cropBox) {
+            const side = Math.min(full.width, full.height) * 0.72;
+            cropBox = {
+                x: (full.width  - side) / 2,
+                y: (full.height - side) / 2 - full.height * 0.04, // shift up slightly for forehead
+                w: side, h: side
+            };
+            if (!('FaceDetector' in window)) {
+                clientLog("FaceDetector API not available — using centre-crop fallback.", "info");
+            } else {
+                clientLog("No face detected — using centre-crop fallback.", "info");
+            }
+        }
+
+        // Render cropped face to a square output canvas (160×160 for FaceNet)
+        const out = document.createElement('canvas');
+        out.width = 160; out.height = 160;
+        const octx = out.getContext('2d');
+        octx.drawImage(full, cropBox.x, cropBox.y, cropBox.w, cropBox.h, 0, 0, 160, 160);
+
+        currentImageBase64 = out.toDataURL('image/jpeg', 0.95);
         photoPreview.src = currentImageBase64;
         stopCamera();
-        clientLog("Webcam snapshot captured successfully.");
+        clientLog("Face-only snapshot captured and cropped successfully.", "success");
         validateActionButtons(); updateCaptureUI();
     }
+
 
     async function checkServerHealth() {
         try {
