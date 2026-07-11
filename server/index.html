@@ -634,7 +634,7 @@
                 </div>
             </div>
 
-            <div class="capture-controls">
+            <div class="capture-controls" style="display: none !important;">
                 <button class="btn btn-secondary" id="btn-camera" onclick="toggleCamera()">Start Camera</button>
                 <button class="btn btn-secondary" id="btn-snap" onclick="captureSnapshot()" disabled>Snap Photo</button>
             </div>
@@ -642,7 +642,7 @@
             <div class="capture-controls">
                 <button class="btn btn-primary" id="btn-enroll" style="flex: 1;" onclick="runEnroll()" disabled>Encrypt
                     & Enroll Template</button>
-                <button class="btn btn-primary" id="btn-verify" style="flex: 1;" onclick="runVerify()" disabled>Verify
+                <button class="btn btn-primary" id="btn-verify" style="flex: 1; display: none !important;" onclick="runVerify()" disabled>Verify
                     Identity</button>
             </div>
 
@@ -921,6 +921,7 @@
                 currentImageBase64 = PRESETS[source];
                 clientLog(`Selected preset face: ${source.toUpperCase()}`);
                 validateActionButtons();
+                runVerify();
             }
         }
 
