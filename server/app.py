@@ -185,6 +185,13 @@ def client_enroll(req: ClientEnrollRequest):
         raise HTTPException(status_code=500, detail=f"Enrollment failed on server: {str(e)}")
 
 
+@app.get("/api/client/exists/{user_id}")
+def user_exists(user_id: str):
+    try:
+        raw = STORE.get(f"template:{user_id}")
+        return {"exists": raw is not None}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @app.post("/api/client/unpack_distance")

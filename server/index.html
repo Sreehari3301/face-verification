@@ -660,21 +660,32 @@
             </div>
 
             <div class="action-form-container" id="action-form-container" style="display: none;">
-                <div style="font-size: 0.95rem; font-weight: 600; color: var(--text-primary);">Biometric Capture Actions</div>
-                <div class="config-grid">
-                    <div class="input-group">
+                <div style="font-size: 0.95rem; font-weight: 600; color: var(--text-primary);" id="form-header-title">Biometric Capture Actions</div>
+                <p id="form-helper-text" style="font-size: 0.8rem; color: var(--text-secondary); margin: 0;">Enter your name to proceed.</p>
+                
+                <div class="config-grid" style="grid-template-columns: 1fr;">
+                    <div class="input-group" id="group-username">
                         <label for="action-username">User Identity</label>
                         <input type="text" id="action-username" placeholder="Username (e.g. alice)">
                     </div>
-                    <div class="input-group">
-                        <label for="action-password">Update Password</label>
-                        <input type="password" id="action-password" placeholder="Password (only to enroll/update)">
+                    <div class="input-group" id="group-password" style="display: none;">
+                        <label for="action-password" id="label-password">Security PIN</label>
+                        <input type="password" id="action-password" placeholder="Enter PIN">
                     </div>
                 </div>
+                
                 <div class="capture-controls" style="margin-top: 0.5rem;">
-                    <button class="btn btn-primary" style="flex: 1;" onclick="runVerifyFromForm()">Verify Identity</button>
-                    <button class="btn btn-primary" style="flex: 1; background: linear-gradient(135deg, #10b981, #059669); box-shadow: 0 4px 15px rgba(16, 185, 129, 0.2);" onclick="runEnrollFromForm()">Save & Enroll</button>
-                    <button class="btn btn-secondary" onclick="retakePhoto()">Retake Capture</button>
+                    <!-- Step 1 button -->
+                    <button class="btn btn-primary" id="btn-proceed" style="flex: 1;" onclick="handleProceedName()">Proceed</button>
+                    
+                    <!-- Enrollment buttons (initially hidden) -->
+                    <button class="btn btn-primary" id="btn-save-enroll" style="flex: 1; display: none; background: linear-gradient(135deg, #10b981, #059669); box-shadow: 0 4px 15px rgba(16, 185, 129, 0.2);" onclick="runEnrollFromForm()">Save & Enroll</button>
+                    
+                    <!-- Overwrite/Update buttons (initially hidden) -->
+                    <button class="btn btn-primary" id="btn-update-enroll" style="flex: 1; display: none; background: linear-gradient(135deg, #f59e0b, #d97706); box-shadow: 0 4px 15px rgba(245, 158, 11, 0.2);" onclick="runEnrollFromForm()">Update Enrolled Face</button>
+                    
+                    <!-- Retake button (always visible) -->
+                    <button class="btn btn-secondary" id="btn-retake" onclick="retakePhoto()">Retake Capture</button>
                 </div>
             </div>
 
@@ -809,6 +820,31 @@
 
         let countdownTimer = null;
         let countdownTimerActive = false;
+        let isUpdateMode = false;
+        let lastEnteredUsername = "";
+
+        function resetFormState() {
+            isUpdateMode = false;
+            lastEnteredUsername = "";
+            document.getElementById('action-username').value = '';
+            document.getElementById('action-password').value = '';
+            document.getElementById('group-password').style.display = 'none';
+            document.getElementById('btn-proceed').style.display = 'block';
+            document.getElementById('btn-save-enroll').style.display = 'none';
+            document.getElementById('btn-update-enroll').style.display = 'none';
+            document.getElementById('form-helper-text').innerHTML = 'Enter your name to proceed.';
+        }
+
+        function showUpdatePrompt() {
+            document.getElementById('group-password').style.display = 'flex';
+            document.getElementById('label-password').textContent = "Enter PIN to change saved image";
+            document.getElementById('action-password').placeholder = "Enter security PIN";
+            document.getElementById('form-helper-text').innerHTML = `<span style="color: var(--danger);">Verification Failed.</span> To change the saved image, capture a new image and enter the PIN, then only changing is allowed.`;
+            
+            document.getElementById('btn-proceed').style.display = 'none';
+            document.getElementById('btn-save-enroll').style.display = 'none';
+            document.getElementById('btn-update-enroll').style.display = 'block';
+        }
 
         function startCountdown() {
             if (countdownTimerActive) return;
@@ -846,6 +882,18 @@
                     photoPreview.style.display = 'block';
                     placeholder.style.display = 'none';
                     formContainer.style.display = 'flex';
+                    
+                    if (isUpdateMode) {
+                        document.getElementById('action-username').value = lastEnteredUsername;
+                        document.getElementById('group-password').style.display = 'flex';
+                        document.getElementById('label-password').textContent = "Enter PIN to change saved image";
+                        document.getElementById('action-password').placeholder = "Enter security PIN";
+                        document.getElementById('form-helper-text').innerHTML = `<span style="color: var(--danger);">Change saved image.</span> Enter your PIN and click "Update Enrolled Face" to overwrite.`;
+                        
+                        document.getElementById('btn-proceed').style.display = 'none';
+                        document.getElementById('btn-save-enroll').style.display = 'none';
+                        document.getElementById('btn-update-enroll').style.display = 'block';
+                    }
                 } else if (stream) {
                     webcam.style.display = 'block';
                     photoPreview.style.display = 'none';
@@ -870,8 +918,7 @@
             (evt || window.event).currentTarget.classList.add('selected');
             selectedSource = source;
 
-            document.getElementById('action-username').value = '';
-            document.getElementById('action-password').value = '';
+            resetFormState();
 
             if (source === 'webcam') {
                 currentImageBase64 = null;
@@ -894,22 +941,47 @@
                 clientLog(`Selected preset face: ${source.toUpperCase()}`);
                 
                 document.getElementById('action-username').value = source;
+                lastEnteredUsername = source;
                 
                 validateActionButtons();
                 updateCaptureUI();
             }
         }
 
-        async function runVerifyFromForm() {
+        async function handleProceedName() {
             const usernameInput = document.getElementById('action-username');
             const userId = usernameInput.value.trim();
             if (!userId) {
-                alert("Please enter a username to verify.");
+                alert("Please enter a username to proceed.");
                 usernameInput.focus();
                 return;
             }
-            document.getElementById('user-id').value = userId;
-            runVerify();
+            
+            lastEnteredUsername = userId;
+            clientLog(`Checking if identity '${userId}' exists in secure database...`);
+            
+            try {
+                const res = await fetch(`${serverUrl}/api/client/exists/${userId}`);
+                const data = await res.json();
+                
+                if (data.exists) {
+                    clientLog(`Identity '${userId}' found. Running face verification...`);
+                    document.getElementById('user-id').value = userId;
+                    await runVerify();
+                } else {
+                    clientLog(`Identity '${userId}' not found. Enter PIN to enroll.`);
+                    
+                    document.getElementById('group-password').style.display = 'flex';
+                    document.getElementById('label-password').textContent = "Create Security PIN";
+                    document.getElementById('action-password').placeholder = "Choose a PIN";
+                    document.getElementById('form-helper-text').innerHTML = `<span style="color: var(--accent-primary);">New Identity.</span> Set a PIN to enroll your biometric template.`;
+                    
+                    document.getElementById('btn-proceed').style.display = 'none';
+                    document.getElementById('btn-save-enroll').style.display = 'block';
+                }
+            } catch (err) {
+                clientLog(`Error querying server: ${err.message}`, "danger");
+            }
         }
 
         async function runEnrollFromForm() {
@@ -919,25 +991,28 @@
             const password = passwordInput.value;
 
             if (!userId) {
-                alert("Please enter a username to enroll.");
+                alert("Please enter a username.");
                 usernameInput.focus();
                 return;
             }
             if (!password) {
-                alert("Please enter a password to secure/update your template.");
+                alert("Please enter a security PIN.");
                 passwordInput.focus();
                 return;
             }
 
             document.getElementById('user-id').value = userId;
             document.getElementById('user-pw').value = password;
-            runEnroll();
+            await runEnroll();
         }
 
         function retakePhoto() {
             currentImageBase64 = null;
-            document.getElementById('action-username').value = '';
-            document.getElementById('action-password').value = '';
+            if (!isUpdateMode) {
+                resetFormState();
+            } else {
+                document.getElementById('action-password').value = '';
+            }
             document.getElementById('action-form-container').style.display = 'none';
             toggleCamera();
         }
@@ -1333,6 +1408,7 @@
                 document.getElementById('result-status').textContent = "OK";
 
                 refreshDatabaseView();
+                resetFormState();
             } catch (err) {
                 clientLog(`Enrollment failed: ${err.message}`, "danger");
                 serverLog(`[Error] Enrollment failed: ${err.message}`, "danger");
@@ -1406,6 +1482,9 @@
                     document.getElementById('result-title').textContent = "Access Denied";
                     document.getElementById('result-desc').textContent = `Biometric mismatch for user '${userId}' (d² = ${distanceSq.toFixed(4)}).`;
                     document.getElementById('result-status').textContent = "FAIL";
+                    
+                    isUpdateMode = true;
+                    showUpdatePrompt();
                 }
             } catch (err) {
                 clientLog(`Verification failed: ${err.message}`, "danger");
