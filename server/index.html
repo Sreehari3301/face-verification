@@ -833,6 +833,9 @@
             document.getElementById('btn-save-enroll').style.display = 'none';
             document.getElementById('btn-update-enroll').style.display = 'none';
             document.getElementById('form-helper-text').innerHTML = 'Enter your name to proceed.';
+            
+            // Re-enable form buttons
+            document.querySelectorAll('.action-form-container .btn').forEach(b => b.disabled = false);
         }
 
         function showUpdatePrompt() {
@@ -1110,6 +1113,9 @@
             const hasImage = currentImageBase64 !== null || (selectedSource === 'webcam' && stream !== null);
             btnEnroll.disabled = !(hasKey && hasImage);
             btnVerify.disabled = !(hasKey && hasImage);
+            
+            // Re-enable dynamic capture action form buttons
+            document.querySelectorAll('.action-form-container .btn').forEach(b => b.disabled = false);
         }
 
 
