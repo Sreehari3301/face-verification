@@ -39,18 +39,26 @@ class EdgeVerificationClient:
         self.threshold_dist_sq = threshold_dist_sq
 
     def _serialize_encrypted_number(self, enc_num) -> str:
+        import json
         payload = {
             "n": self.crypto.public_key.n,
             "ciphertext": enc_num.ciphertext(),
             "exponent": enc_num.exponent,
         }
-        return base64.b64encode(pickle.dumps(payload)).decode("ascii")
+        return base64.b64encode(json.dumps(payload).encode("utf-8")).decode("ascii")
 
     def _deserialize_encrypted_number(self, s: str):
+        import json
         from phe import paillier
-        payload = pickle.loads(base64.b64decode(s))
+        raw_bytes = base64.b64decode(s)
+        try:
+            payload = json.loads(raw_bytes.decode("utf-8"))
+        except (json.JSONDecodeError, UnicodeDecodeError, AttributeError):
+            import pickle
+            payload = pickle.loads(raw_bytes)
         pub_key = paillier.PaillierPublicKey(n=payload["n"])
         return paillier.EncryptedNumber(pub_key, payload["ciphertext"], payload["exponent"])
+
 
     def enroll(self, user_id: str, embedding: np.ndarray, apply_perturbation: bool = True):
         emb = self.perturb.apply(embedding) if apply_perturbation else embedding

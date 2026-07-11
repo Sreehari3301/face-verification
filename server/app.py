@@ -33,18 +33,26 @@ STORE = get_store()
 
 
 def _serialize_encrypted_number(enc_num, public_key) -> str:
+    import json
     payload = {
         "n": public_key.n,
         "ciphertext": enc_num.ciphertext(),
         "exponent": enc_num.exponent,
     }
-    return base64.b64encode(pickle.dumps(payload)).decode("ascii")
+    return base64.b64encode(json.dumps(payload).encode("utf-8")).decode("ascii")
 
 
 def _deserialize_encrypted_number(s: str) -> "paillier.EncryptedNumber":
-    payload = pickle.loads(base64.b64decode(s))
+    import json
+    raw_bytes = base64.b64decode(s)
+    try:
+        payload = json.loads(raw_bytes.decode("utf-8"))
+    except (json.JSONDecodeError, UnicodeDecodeError, AttributeError):
+        import pickle
+        payload = pickle.loads(raw_bytes)
     pub_key = paillier.PaillierPublicKey(n=payload["n"])
     return paillier.EncryptedNumber(pub_key, payload["ciphertext"], payload["exponent"])
+
 
 
 class EnrollRequest(BaseModel):
@@ -135,29 +143,41 @@ def generate_keys(key_length: int = 1024):
 
 @app.post("/api/client/enroll")
 def client_enroll(req: ClientEnrollRequest):
-    pub_n = int(req.public_key_n)
-    public_key = paillier.PaillierPublicKey(n=pub_n)
-    
-    enc_vector_b64 = []
-    for c_str in req.enc_vector:
-        enc_num = paillier.EncryptedNumber(public_key, int(c_str), 0)
-        enc_vector_b64.append(_serialize_encrypted_number(enc_num, public_key))
+    try:
+        pub_n = int(req.public_key_n)
+        public_key = paillier.PaillierPublicKey(n=pub_n)
         
-    enc_norm_sq_num = paillier.EncryptedNumber(public_key, int(req.enc_norm_sq), 0)
-    enc_norm_sq_b64 = _serialize_encrypted_number(enc_norm_sq_num, public_key)
-    
-    template_json = serialize_template(enc_vector_b64, enc_norm_sq_b64, pub_n)
-    STORE.set(f"template:{req.user_id}", template_json)
-    if hasattr(STORE, "increment_count"):
-        STORE.increment_count()
+        enc_vector_b64 = []
+        for c_str in req.enc_vector:
+            enc_num = paillier.EncryptedNumber(public_key, int(c_str), 0)
+            enc_vector_b64.append(_serialize_encrypted_number(enc_num, public_key))
+            
+        enc_norm_sq_num = paillier.EncryptedNumber(public_key, int(req.enc_norm_sq), 0)
+        enc_norm_sq_b64 = _serialize_encrypted_number(enc_norm_sq_num, public_key)
         
-    return {"status": "enrolled", "user_id": req.user_id, "dims": len(req.enc_vector)}
+        template_json = serialize_template(enc_vector_b64, enc_norm_sq_b64, pub_n)
+        STORE.set(f"template:{req.user_id}", template_json)
+        if hasattr(STORE, "increment_count"):
+            STORE.increment_count()
+            
+        return {"status": "enrolled", "user_id": req.user_id, "dims": len(req.enc_vector)}
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Enrollment failed on server: {str(e)}")
+
 
 
 @app.post("/api/client/unpack_distance")
 def unpack_distance(req: UnpackRequest):
-    enc_num = _deserialize_encrypted_number(req.enc_distance_sq)
-    return {"ciphertext": str(enc_num.ciphertext())}
+    try:
+        enc_num = _deserialize_encrypted_number(req.enc_distance_sq)
+        return {"ciphertext": str(enc_num.ciphertext())}
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Unpacking distance failed on server: {str(e)}")
+
 
 
 @app.post("/enroll")
@@ -181,27 +201,35 @@ def verify(req: VerifyRequest):
     The server never decrypts this value and never learns the match/no-match
     outcome -- that decision happens client-side after decryption.
     """
-    raw = STORE.get(f"template:{req.user_id}")
-    if raw is None:
-        raise HTTPException(status_code=404, detail="No enrolled template for user_id")
+    try:
+        raw = STORE.get(f"template:{req.user_id}")
+        if raw is None:
+            raise HTTPException(status_code=404, detail="No enrolled template for user_id")
 
-    template = deserialize_template(raw)
-    public_key = paillier.PaillierPublicKey(n=template["public_key_n"])
-    enc_vector = [_deserialize_encrypted_number(c) for c in template["enc_vector"]]
-    enc_norm_sq = _deserialize_encrypted_number(template["enc_norm_sq"])
-    server = PaillierServer(public_key)
+        template = deserialize_template(raw)
+        public_key = paillier.PaillierPublicKey(n=template["public_key_n"])
+        enc_vector = [_deserialize_encrypted_number(c) for c in template["enc_vector"]]
+        enc_norm_sq = _deserialize_encrypted_number(template["enc_norm_sq"])
+        server = PaillierServer(public_key)
 
-    import numpy as np
-    query_arr = np.array(req.query_plain, dtype=np.float64)
+        import numpy as np
+        query_arr = np.array(req.query_plain, dtype=np.float64)
 
-    enc_dist_sq = server.homomorphic_distance_sq(
-        {"enc_vector": enc_vector, "enc_norm_sq": enc_norm_sq},
-        query_arr,
-    )
+        enc_dist_sq = server.homomorphic_distance_sq(
+            {"enc_vector": enc_vector, "enc_norm_sq": enc_norm_sq},
+            query_arr,
+        )
 
-    return {
-        "enc_distance_sq": _serialize_encrypted_number(enc_dist_sq, public_key)
-    }
+        return {
+            "enc_distance_sq": _serialize_encrypted_number(enc_dist_sq, public_key)
+        }
+    except HTTPException as e:
+        raise e
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Verification failed on server: {str(e)}")
+
 
 
 @app.get("/health")
