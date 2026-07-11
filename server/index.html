@@ -229,6 +229,10 @@ tr:last-child td{border-bottom:none}
 
         <div class="capture-container">
             <video id="webcam" autoplay playsinline></video>
+            <!-- Live face-detection overlay canvas -->
+            <canvas id="face-scan-canvas" style="position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;display:none;"></canvas>
+            <!-- Face-detected badge -->
+            <div id="face-badge" style="position:absolute;bottom:10px;left:50%;transform:translateX(-50%);display:none;padding:.25rem .75rem;border-radius:99px;font-size:.7rem;font-weight:700;letter-spacing:.06em;backdrop-filter:blur(8px);"></div>
             <img id="photo-preview" src="" alt="Captured Image">
             <div class="capture-placeholder" id="capture-placeholder">
                 <svg viewBox="0 0 24 24" stroke-width="1.5">
@@ -463,19 +467,116 @@ tr:last-child td{border-bottom:none}
         setDisplay('btn-update-enroll', 'block');
     }
 
+    let faceScanInterval = null;
+    let faceScanPulse = 0;
+
+    async function startFaceScan() {
+        const canvas = gid('face-scan-canvas');
+        const badge  = gid('face-badge');
+        if (!canvas || !webcam) return;
+        canvas.width  = webcam.videoWidth  || 400;
+        canvas.height = webcam.videoHeight || 300;
+        canvas.style.display = 'block';
+        badge.style.display  = 'block';
+
+        faceScanInterval = setInterval(async () => {
+            if (!stream) { stopFaceScan(); return; }
+            const ctx = canvas.getContext('2d');
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            faceScanPulse = (faceScanPulse + 1) % 20;
+            const pulse = 0.55 + Math.sin(faceScanPulse / 20 * Math.PI * 2) * 0.25;
+
+            if ('FaceDetector' in window) {
+                try {
+                    // Grab current frame into temp canvas for detection
+                    const tmp = document.createElement('canvas');
+                    tmp.width = webcam.videoWidth || 400; tmp.height = webcam.videoHeight || 300;
+                    const tctx = tmp.getContext('2d');
+                    tctx.translate(tmp.width, 0); tctx.scale(-1, 1);
+                    tctx.drawImage(webcam, 0, 0, tmp.width, tmp.height);
+
+                    const faces = await new FaceDetector({ fastMode:true, maxDetectedFaces:1 }).detect(tmp);
+                    if (faces.length > 0) {
+                        const b = faces[0].boundingBox;
+                        const pad = Math.max(b.width, b.height) * 0.35;
+                        const cx = Math.max(0, b.x - pad), cy = Math.max(0, b.y - pad * 1.2);
+                        const cw = Math.min(tmp.width,  b.x + b.width  + pad)   - cx;
+                        const ch = Math.min(tmp.height, b.y + b.height + pad)   - cy;
+
+                        // Draw crop-preview box
+                        ctx.save();
+                        ctx.strokeStyle = `rgba(16,185,129,${pulse})`;
+                        ctx.lineWidth = 2.5;
+                        ctx.shadowColor = 'rgba(16,185,129,.7)';
+                        ctx.shadowBlur = 8;
+                        ctx.strokeRect(cx, cy, cw, ch);
+
+                        // Corner accents
+                        const cs = 14;
+                        ctx.lineWidth = 3.5;
+                        [[cx,cy],[cx+cw,cy],[cx,cy+ch],[cx+cw,cy+ch]].forEach(([x,y],i) => {
+                            ctx.beginPath();
+                            ctx.moveTo(x + (i%2===0?0:cs*-1), y); ctx.lineTo(x + (i%2===0?cs:-cs), y);
+                            ctx.moveTo(x, y + (i<2?0:cs*-1)); ctx.lineTo(x, y + (i<2?cs:-cs));
+                            ctx.stroke();
+                        });
+                        ctx.restore();
+
+                        badge.textContent = '✓ FACE DETECTED';
+                        badge.style.background = 'rgba(16,185,129,.15)';
+                        badge.style.border = '1px solid rgba(16,185,129,.4)';
+                        badge.style.color = '#10b981';
+                    } else {
+                        drawNoFaceBox(ctx, canvas, pulse);
+                        badge.textContent = '⚠ NO FACE — CENTRE CROP ACTIVE';
+                        badge.style.background = 'rgba(245,158,11,.12)';
+                        badge.style.border = '1px solid rgba(245,158,11,.35)';
+                        badge.style.color = '#f59e0b';
+                    }
+                } catch(e) { drawNoFaceBox(ctx, canvas, pulse); }
+            } else {
+                drawNoFaceBox(ctx, canvas, pulse);
+                badge.textContent = 'ℹ CENTRE CROP ACTIVE (no FaceDetector API)';
+                badge.style.background = 'rgba(99,102,241,.12)';
+                badge.style.border = '1px solid rgba(99,102,241,.3)';
+                badge.style.color = 'var(--accent-primary)';
+            }
+        }, 300);
+    }
+
+    function drawNoFaceBox(ctx, canvas, pulse) {
+        const side = Math.min(canvas.width, canvas.height) * 0.72;
+        const cx = (canvas.width  - side) / 2;
+        const cy = (canvas.height - side) / 2 - canvas.height * 0.04;
+        ctx.save();
+        ctx.strokeStyle = `rgba(99,102,241,${pulse})`;
+        ctx.lineWidth = 2; ctx.setLineDash([6,4]);
+        ctx.shadowColor = 'rgba(99,102,241,.5)'; ctx.shadowBlur = 6;
+        ctx.strokeRect(cx, cy, side, side);
+        ctx.restore();
+    }
+
+    function stopFaceScan() {
+        clearInterval(faceScanInterval); faceScanInterval = null;
+        const canvas = gid('face-scan-canvas'), badge = gid('face-badge');
+        if (canvas) { canvas.getContext('2d').clearRect(0,0,canvas.width,canvas.height); canvas.style.display='none'; }
+        if (badge)  badge.style.display = 'none';
+    }
+
     function startCountdown() {
         if (countdownTimerActive) return;
         const overlay = gid('countdown-overlay'), textSpan = gid('countdown-text');
         overlay.style.display = 'flex';
         textSpan.textContent = 'Aligning Face...';
         countdownTimerActive = true;
+        startFaceScan();
         let seconds = 2;
         countdownTimer = setInterval(() => {
             if (selectedSource !== 'webcam' || !stream) {
-                clearInterval(countdownTimer); overlay.style.display = 'none'; countdownTimerActive = false; return;
+                clearInterval(countdownTimer); overlay.style.display = 'none'; countdownTimerActive = false; stopFaceScan(); return;
             }
             if (seconds > 0) { textSpan.textContent = `Capturing in ${seconds--}...`; }
-            else { clearInterval(countdownTimer); overlay.style.display = 'none'; countdownTimerActive = false; captureSnapshot(); }
+            else { clearInterval(countdownTimer); overlay.style.display = 'none'; countdownTimerActive = false; stopFaceScan(); captureSnapshot(); }
         }, 1000);
     }
 
@@ -596,6 +697,7 @@ tr:last-child td{border-bottom:none}
         if (!stream) return;
         if (countdownTimer) clearInterval(countdownTimer);
         countdownTimerActive = false;
+        stopFaceScan();
         const overlay = gid('countdown-overlay');
         if (overlay) overlay.style.display = 'none';
         stream.getTracks().forEach(t => t.stop());
